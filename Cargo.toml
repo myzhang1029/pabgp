@@ -1,0 +1,12 @@
+[package]
+name = "delegation-feed"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+lazy_static = "1"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+simplelog = "0.12"
+thiserror = "1"
+ureq = "2"
