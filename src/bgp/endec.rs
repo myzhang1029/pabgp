@@ -30,7 +30,7 @@ pub const MARKER: [u8; 16] = [
 ];
 
 /// BGP packet encoder
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct BgpCodec;
 
 /// BGP packet errors

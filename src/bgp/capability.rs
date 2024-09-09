@@ -16,8 +16,8 @@ use num_traits::FromPrimitive;
 use std::ops::Deref;
 
 /// A list of BGP optional parameters
-#[derive(Clone, Debug, PartialEq)]
-pub struct OptionalParameters(Vec<OptionalParameterValue>);
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct OptionalParameters(pub Vec<OptionalParameterValue>);
 
 impl Component for OptionalParameters {
     fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
@@ -42,6 +42,12 @@ impl Component for OptionalParameters {
         }
         dst[length_pos] = u8::try_from(len).expect("Optional parameters length overflow");
         len + 1 // Length
+    }
+}
+
+impl From<Vec<OptionalParameterValue>> for OptionalParameters {
+    fn from(params: Vec<OptionalParameterValue>) -> Self {
+        Self(params)
     }
 }
 
@@ -105,7 +111,7 @@ impl Component for OptionalParameterValue {
 
 /// BGP capability
 // "a BGP speaker MUST be prepared to accept such multiple instances," so a Vec must be used
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Capabilities(Vec<Value>);
 
 impl Component for Capabilities {
@@ -159,6 +165,12 @@ impl Component for Capabilities {
             len += value_len + 2; // Code and length
         }
         len
+    }
+}
+
+impl From<Vec<Value>> for Capabilities {
+    fn from(values: Vec<Value>) -> Self {
+        Self(values)
     }
 }
 
@@ -263,8 +275,22 @@ pub enum Safi {
 }
 
 /// BGP extended next hop capability (RFC 8950)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ExtendedNextHop(pub Vec<ExtendedNextHopValue>);
+
+impl From<Vec<ExtendedNextHopValue>> for ExtendedNextHop {
+    fn from(values: Vec<ExtendedNextHopValue>) -> Self {
+        Self(values)
+    }
+}
+
+impl Deref for ExtendedNextHop {
+    type Target = Vec<ExtendedNextHopValue>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// BGP extended next hop value field (RFC 8950)
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -313,4 +339,143 @@ impl Component for ExtendedNextHop {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct FourOctetAsNumber {
     pub asn: u32,
+}
+
+impl From<u32> for FourOctetAsNumber {
+    fn from(asn: u32) -> Self {
+        Self { asn }
+    }
+}
+
+impl Deref for FourOctetAsNumber {
+    type Target = u32;
+
+    fn deref(&self) -> &Self::Target {
+        &self.asn
+    }
+}
+
+/// Builder for BGP capabilities
+#[derive(Debug, Default)]
+pub struct CapabilitiesBuilder {
+    data: Vec<Value>,
+    extended_next_hops: Vec<ExtendedNextHopValue>,
+}
+
+impl CapabilitiesBuilder {
+    /// Create a new capabilities builder
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add a multi-protocol capability
+    pub fn multi_protocol(mut self, afi: Afi, safi: Safi) -> Self {
+        self.data
+            .push(Value::MultiProtocol(MultiProtocol { afi, safi }));
+        self
+    }
+
+    /// Shortcut for adding an IPv4 unicast multi-protocol capability
+    pub fn mp_ipv4_unicast(self) -> Self {
+        self.multi_protocol(Afi::Ipv4, Safi::Unicast)
+    }
+
+    /// Shortcut for adding an IPv6 unicast multi-protocol capability
+    pub fn mp_ipv6_unicast(self) -> Self {
+        self.multi_protocol(Afi::Ipv6, Safi::Unicast)
+    }
+
+    /// Add a route refresh capability
+    pub fn route_refresh(mut self) -> Self {
+        self.data.push(Value::RouteRefresh);
+        self
+    }
+
+    /// Add an extended next hop capability
+    pub fn extended_next_hop(mut self, value: ExtendedNextHop) -> Self {
+        self.extended_next_hops.extend(value.0);
+        self
+    }
+
+    /// Shortcut for adding a IPv4-over-IPv6 extended next hop capability
+    pub fn enh_ipv4_over_ipv6(mut self) -> Self {
+        self.extended_next_hops.push(ExtendedNextHopValue {
+            afi: Afi::Ipv4,
+            safi: Safi::Unicast,
+            next_hop_afi: Afi::Ipv6,
+        });
+        self
+    }
+
+    /// Add a four-octet AS number capability
+    pub fn four_octet_as_number(mut self, asn: u32) -> Self {
+        self.data
+            .push(Value::FourOctetAsNumber(FourOctetAsNumber { asn }));
+        self
+    }
+
+    /// Add a four-octet AS number capability if the AS number is greater than 65535
+    pub fn four_octet_as_number_if_needed(self, asn: u32) -> Self {
+        if asn > u32::from(u16::MAX) {
+            self.four_octet_as_number(asn)
+        } else {
+            self
+        }
+    }
+
+    /// Add an unsupported capability
+    pub fn other(mut self, code: u8, data: Bytes) -> Self {
+        self.data.push(Value::Unsupported(code, data));
+        self
+    }
+
+    /// Build the capabilities
+    pub fn build(self) -> Capabilities {
+        let extended_next_hops = ExtendedNextHop(self.extended_next_hops);
+        let mut data = self.data;
+        if !extended_next_hops.0.is_empty() {
+            data.push(Value::ExtendedNextHop(extended_next_hops));
+        }
+        Capabilities(data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_cap_builder() {
+        use super::*;
+        let cap = CapabilitiesBuilder::new()
+            .mp_ipv4_unicast()
+            .mp_ipv6_unicast()
+            .enh_ipv4_over_ipv6()
+            .four_octet_as_number(65536)
+            .other(255, Bytes::from_static(&[1, 2, 3, 4]))
+            .build();
+        assert_eq!(cap.0.len(), 5);
+        assert!(cap.0.iter().any(|v| *v
+            == Value::MultiProtocol(MultiProtocol {
+                afi: Afi::Ipv4,
+                safi: Safi::Unicast
+            })));
+        assert!(cap.0.iter().any(|v| *v
+            == Value::MultiProtocol(MultiProtocol {
+                afi: Afi::Ipv6,
+                safi: Safi::Unicast
+            })));
+        assert!(cap.0.iter().any(|v| *v
+            == Value::ExtendedNextHop(ExtendedNextHop(vec![ExtendedNextHopValue {
+                afi: Afi::Ipv4,
+                safi: Safi::Unicast,
+                next_hop_afi: Afi::Ipv6
+            }]))));
+        assert!(cap
+            .0
+            .iter()
+            .any(|v| *v == Value::FourOctetAsNumber(FourOctetAsNumber { asn: 65536 })));
+        assert!(cap
+            .0
+            .iter()
+            .any(|v| *v == Value::Unsupported(255, Bytes::from_static(&[1, 2, 3, 4]))));
+    }
 }

@@ -95,7 +95,7 @@ impl From<Cidr> for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgp::packet::tests::hex_to_bytes;
+    use crate::bgp::tests::hex_to_bytes;
     use bytes::BytesMut;
 
     #[test]

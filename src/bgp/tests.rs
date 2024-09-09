@@ -339,8 +339,11 @@ fn test_notification_message_wsh_1() {
         Message::Notification(msg) => msg,
         _ => panic!("unexpected message type"),
     };
-    assert_eq!(msg.error_code, 6);
-    assert_eq!(msg.error_subcode, 2);
+    assert_eq!(msg.error_code, NotificationErrorCode::Cease);
+    assert_eq!(
+        msg.error_subcode,
+        CeaseSubcode::AdministrativeShutdown as u8
+    );
     assert_eq!(msg.data, Bytes::from_static(&[]));
     let mut bmut = BytesMut::new();
     codec.encode(Message::Notification(msg), &mut bmut).unwrap();

@@ -50,6 +50,93 @@ pub enum Error {
     InvalidHeader(String),
 }
 
+/// Database diff
+#[derive(Clone, Debug, Default)]
+pub struct DatabaseDiff {
+    /// IPv4 prefixes that were added
+    pub new_ipv4: HashMap<CountrySpec, Vec<Cidr4>>,
+    /// IPv4 prefixes that were removed
+    pub withdrawn_ipv4: HashMap<CountrySpec, Vec<Cidr4>>,
+    /// IPv6 prefixes that were added
+    pub new_ipv6: HashMap<CountrySpec, Vec<Cidr6>>,
+    /// IPv6 prefixes that were removed
+    pub withdrawn_ipv6: HashMap<CountrySpec, Vec<Cidr6>>,
+}
+
+impl DatabaseDiff {
+    /// Apply the diff to a database
+    pub fn apply_to(self, db: &mut Database) {
+        for (country, prefixes) in self.new_ipv4 {
+            db.ipv4_prefixes
+                .entry(country)
+                .or_default()
+                .extend(prefixes);
+        }
+        for (country, prefixes) in self.withdrawn_ipv4 {
+            let db_prefixes = db.ipv4_prefixes.entry(country).or_default();
+            db_prefixes.retain(|prefix| !prefixes.contains(prefix));
+        }
+        for (country, prefixes) in self.new_ipv6 {
+            db.ipv6_prefixes
+                .entry(country)
+                .or_default()
+                .extend(prefixes);
+        }
+        for (country, prefixes) in self.withdrawn_ipv6 {
+            let db_prefixes = db.ipv6_prefixes.entry(country).or_default();
+            db_prefixes.retain(|prefix| !prefixes.contains(prefix));
+        }
+    }
+
+    /// Create a diff between two databases
+    pub fn from_databases(old: &Database, new: &Database) -> Self {
+        let mut diff = Self::default();
+        for (country, prefixes) in &new.ipv4_prefixes {
+            match old.ipv4_prefixes.get(country) {
+                Some(old_prefixes) => {
+                    let new_prefixes = prefixes
+                        .iter()
+                        .filter(|prefix| !old_prefixes.contains(prefix))
+                        .copied()
+                        .collect();
+                    diff.new_ipv4.insert(*country, new_prefixes);
+                    let withdrawn_prefixes = old_prefixes
+                        .iter()
+                        .filter(|prefix| !prefixes.contains(prefix))
+                        .copied()
+                        .collect();
+                    diff.withdrawn_ipv4.insert(*country, withdrawn_prefixes);
+                }
+                None => {
+                    diff.new_ipv4.insert(*country, prefixes.clone());
+                }
+            }
+        }
+        for (country, prefixes) in &new.ipv6_prefixes {
+            match old.ipv6_prefixes.get(country) {
+                Some(old_prefixes) => {
+                    let new_prefixes = prefixes
+                        .iter()
+                        .filter(|prefix| !old_prefixes.contains(prefix))
+                        .copied()
+                        .collect();
+                    diff.new_ipv6.insert(*country, new_prefixes);
+                    let withdrawn_prefixes = old_prefixes
+                        .iter()
+                        .filter(|prefix| !prefixes.contains(prefix))
+                        .copied()
+                        .collect();
+                    diff.withdrawn_ipv6.insert(*country, withdrawn_prefixes);
+                }
+                None => {
+                    diff.new_ipv6.insert(*country, prefixes.clone());
+                }
+            }
+        }
+        diff
+    }
+}
+
 /// Main database of RIR statistics (country to IP prefix)
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Database {
@@ -87,6 +174,15 @@ impl Database {
             }
         }
         Ok(())
+    }
+
+    /// Update the database with a new country's statistics.
+    pub fn update_with_diff(&mut self) -> Result<DatabaseDiff, Error> {
+        let mut new_db = Self::new(self.country_specs.clone());
+        new_db.update_all()?;
+        let diff = DatabaseDiff::from_databases(self, &new_db);
+        *self = new_db;
+        Ok(diff)
     }
 
     /// Get the IPv4 CIDR blocks for a country

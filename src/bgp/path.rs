@@ -16,7 +16,7 @@ use std::{
 };
 
 /// BGP path attributes
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 #[allow(clippy::module_name_repetitions)]
 pub struct PathAttributes(pub Vec<Value>);
 
@@ -236,7 +236,7 @@ impl Component for Origin {
 }
 
 /// BGP AS path
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct AsPath(pub Vec<AsSegment>);
 
 impl Component for AsPath {
@@ -476,7 +476,7 @@ impl Component for MpUnreachNlri {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgp::packet::tests::hex_to_bytes;
+    use crate::bgp::tests::hex_to_bytes;
 
     #[test]
     fn test_origin() {
