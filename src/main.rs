@@ -1,3 +1,5 @@
+mod bgp;
+mod cidr;
 mod rirstat;
 
 use rirstat::Database;

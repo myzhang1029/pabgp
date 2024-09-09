@@ -3,17 +3,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // https://www.apnic.net/about-apnic/corporate-documents/documents/resource-guidelines/rir-statistics-exchange-format/
 
-pub mod cidr;
 pub mod rirbase;
 
+use crate::cidr::{Cidr, Cidr4, Cidr6};
 use lazy_static::lazy_static;
+use rirbase::{CountrySpec, RirName};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufRead;
-
-use cidr::{Cidr, Cidr4, Cidr6};
-use rirbase::{CountrySpec, RirName};
 
 pub const ARIN_URL: &str = "https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest";
 pub const RIPE_URL: &str = "https://ftp.ripe.net/ripe/stats/delegated-ripencc-latest";
@@ -178,9 +176,10 @@ impl Database {
         }
         let rir = parts[0].parse().ok()?;
         let country_code = parts[1];
+        let af = parts[2];
         // Err: Probably a unallocated block or a summary line
         let country = CountrySpec::new(rir, country_code).ok()?;
-        match parts[2] {
+        match af {
             "ipv4" => {
                 let addr = parts[3].parse().ok()?;
                 let num_hosts = parts[4].parse().ok()?;
@@ -259,6 +258,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "test-real-internet")]
     fn test_update_all_cnv4() {
         let country = "apnic:CN".parse().unwrap();
         let mut db = Database::new(vec![country]);

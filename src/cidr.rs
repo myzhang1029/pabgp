@@ -11,8 +11,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 /// A IPv4 CIDR block
 #[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct Cidr4 {
-    addr: Ipv4Addr,
-    prefix_len: u8,
+    pub addr: Ipv4Addr,
+    pub prefix_len: u8,
 }
 
 impl fmt::Display for Cidr4 {
@@ -37,8 +37,8 @@ impl Cidr4 {
 /// A IPv6 CIDR block
 #[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct Cidr6 {
-    addr: Ipv6Addr,
-    prefix_len: u8,
+    pub addr: Ipv6Addr,
+    pub prefix_len: u8,
 }
 
 impl fmt::Display for Cidr6 {
