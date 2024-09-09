@@ -129,7 +129,7 @@ impl Component for Notification {
     fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
         let error_code = src.get_u8();
         let error_subcode = src.get_u8();
-        let data = src.clone();
+        let data = src.copy_to_bytes(src.remaining());
         Ok(Self {
             error_code,
             error_subcode,
