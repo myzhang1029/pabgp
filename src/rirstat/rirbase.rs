@@ -47,7 +47,7 @@ impl FromStr for RirName {
         let s = s.to_ascii_lowercase();
         match s.as_str() {
             "arin" => Ok(Self::Arin),
-            "ripencc" => Ok(Self::Ripencc),
+            "ripencc" | "ripe" => Ok(Self::Ripencc),
             "apnic" => Ok(Self::Apnic),
             "lacnic" => Ok(Self::Lacnic),
             "afrinic" => Ok(Self::Afrinic),

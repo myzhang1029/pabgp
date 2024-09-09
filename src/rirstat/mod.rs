@@ -18,7 +18,7 @@ pub const RIPE_URL: &str = "https://ftp.ripe.net/ripe/stats/delegated-ripencc-la
 pub const APNIC_URL: &str = "https://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest";
 pub const LACNIC_URL: &str = "https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-latest";
 pub const AFRINIC_URL: &str = "https://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-latest";
-pub const SUPPORTED_VERSION: u32 = 2;
+pub const SUPPORTED_VERSIONS: [&str; 2] = ["2", "2.3"];
 
 lazy_static! {
     static ref RIR_INFO: HashMap<RirName, &'static str> = [
@@ -43,7 +43,7 @@ pub enum Error {
     #[error(transparent)]
     Ureq(#[from] Box<ureq::Error>),
     #[error("Unsupported RIR statistics version {0} from {1}")]
-    UnsupportedVersion(u32, RirName),
+    UnsupportedVersion(String, RirName),
     #[error("Unexpected RIR {0} (expected {1})")]
     UnexpectedRir(RirName, RirName),
     #[error("Invalid header line: {0}")]
@@ -143,20 +143,26 @@ pub struct Database {
     /// List of countries that we care about
     country_specs: Vec<CountrySpec>,
     /// Serial numbers of all fetched RIR statistics files
-    serial_numbers: HashMap<RirName, u32>,
+    serial_numbers: HashMap<RirName, u64>,
+    /// Whether to parse IPv4 prefixes
+    enable_ipv4: bool,
     /// Mapping from countries to delegated IPv4 prefixes
     ipv4_prefixes: HashMap<CountrySpec, Vec<Cidr4>>,
+    /// Whether to parse IPv6 prefixes
+    enable_ipv6: bool,
     /// Mapping from countries to delegated IPv6 prefixes
     ipv6_prefixes: HashMap<CountrySpec, Vec<Cidr6>>,
 }
 
 impl Database {
     /// Create a new empty database
-    pub fn new(countries: Vec<CountrySpec>) -> Self {
+    pub fn new(countries: Vec<CountrySpec>, enable_ipv4: bool, enable_ipv6: bool) -> Self {
         Self {
             country_specs: countries,
             serial_numbers: HashMap::new(),
+            enable_ipv4,
             ipv4_prefixes: HashMap::new(),
+            enable_ipv6,
             ipv6_prefixes: HashMap::new(),
         }
     }
@@ -178,7 +184,11 @@ impl Database {
 
     /// Update the database with a new country's statistics.
     pub fn update_with_diff(&mut self) -> Result<DatabaseDiff, Error> {
-        let mut new_db = Self::new(self.country_specs.clone());
+        let mut new_db = Self::new(
+            self.country_specs.clone(),
+            self.enable_ipv4,
+            self.enable_ipv6,
+        );
         new_db.update_all()?;
         let diff = DatabaseDiff::from_databases(self, &new_db);
         *self = new_db;
@@ -229,7 +239,7 @@ impl Database {
     ///  - Ok(None) if the line is not a header line.
     ///  - Ok(Some(serial)) if the header is valid.
     ///  - Err(_) if the header is invalid.
-    fn check_header(line: &str, expected_rir: RirName) -> Result<Option<u32>, Error> {
+    fn check_header(line: &str, expected_rir: RirName) -> Result<Option<u64>, Error> {
         if line.starts_with('#') {
             log::debug!("skipping line: {:?}", line);
             return Ok(None);
@@ -239,21 +249,19 @@ impl Database {
         if parts.len() < 7 {
             return Err(Error::InvalidHeader(line.to_string()));
         }
-        let version = parts[0]
-            .parse()
-            .map_err(|_| Error::InvalidHeader(line.to_string()))?;
+        let version = parts[0];
         let rir = parts[1]
             .parse()
             .map_err(|_| Error::InvalidHeader(line.to_string()))?;
-        let serial: u32 = parts[2]
+        let serial: u64 = parts[2]
             .parse()
             .map_err(|_| Error::InvalidHeader(line.to_string()))?;
         log::debug!("found header: {:?}", parts);
         if rir != expected_rir {
             return Err(Error::UnexpectedRir(rir, expected_rir));
         }
-        if version != SUPPORTED_VERSION {
-            return Err(Error::UnsupportedVersion(version, rir));
+        if !SUPPORTED_VERSIONS.contains(&version) {
+            return Err(Error::UnsupportedVersion(version.to_string(), rir));
         }
         Ok(Some(serial))
     }
@@ -306,10 +314,14 @@ impl Database {
             }
             match cidr {
                 Cidr::V4(cidr) => {
-                    self.ipv4_prefixes.entry(country).or_default().push(cidr);
+                    if self.enable_ipv4 {
+                        self.ipv4_prefixes.entry(country).or_default().push(cidr);
+                    }
                 }
                 Cidr::V6(cidr) => {
-                    self.ipv6_prefixes.entry(country).or_default().push(cidr);
+                    if self.enable_ipv6 {
+                        self.ipv6_prefixes.entry(country).or_default().push(cidr);
+                    }
                 }
             }
         }
