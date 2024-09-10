@@ -214,7 +214,7 @@ impl Feeder {
     async fn handle_peer_packet(&mut self, packet: Message) -> Result<(), Error> {
         match packet {
             Message::Keepalive => {
-                log::info!("Received KEEPALIVE message from peer");
+                log::debug!("Received KEEPALIVE message from peer");
                 // Just send the exact same message back
                 self.tx.feed(packet).await?;
                 self.tx.flush().await?;
