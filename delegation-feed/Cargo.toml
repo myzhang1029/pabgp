@@ -26,7 +26,7 @@ futures-util = { version = "0.3", features = ["sink"] }
 lazy_static = "1"
 log = "0.4"
 num-traits = "0.2"
-pabgp = { path = "../pabgp" }
+pabgp = { version = "0.1", path = "../pabgp" }
 serde = { version = "1", features = ["derive"] }
 simplelog = "0.12"
 thiserror = "1"
