@@ -65,6 +65,26 @@ fn updater(
     }
 }
 
+fn dry_run_and_exit(mut db: Database) -> ! {
+    db.update_all().expect("Failed to update database");
+    let (ipv4_prefixes, ipv6_prefixes) = db.into_prefixes();
+    println!("IPv4 prefixes:");
+    for (country, prefixes) in ipv4_prefixes.iter() {
+        println!("  {country}:");
+        for prefix in prefixes {
+            println!("    {prefix}");
+        }
+    }
+    println!("IPv6 prefixes:");
+    for (country, prefixes) in ipv6_prefixes.iter() {
+        println!("  {country}:");
+        for prefix in prefixes {
+            println!("    {prefix}");
+        }
+    }
+    std::process::exit(0);
+}
+
 #[tokio::main]
 async fn main() {
     let args = arg::DelegationFeed::parse();
@@ -74,6 +94,9 @@ async fn main() {
         log::LevelFilter::Info
     });
     let mut db = Database::new(args.countries.clone(), args.enable_ipv4, args.enable_ipv6);
+    if args.dry_run {
+        dry_run_and_exit(db);
+    }
     let local_as = args.local_as;
     let local_id = args.local_id;
     let next_hop = args.next_hop.unwrap_or_else(|| local_id.into());
@@ -82,7 +105,7 @@ async fn main() {
         .await
         .expect("Failed to bind to listen address");
     let (send_updates, mut recv_updates) = broadcast::channel(16);
-    let updater_copy = dbg!(db.clone());
+    let updater_copy = db.clone();
     tokio::task::spawn_blocking(move || {
         updater(updater_copy, &send_updates, update_interval);
     });

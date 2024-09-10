@@ -9,8 +9,10 @@ use std::net::{IpAddr, Ipv4Addr};
 #[derive(Parser, Debug)]
 pub struct DelegationFeed {
     /// Our AS number (supports 4-byte AS number)
+    #[arg(required_unless_present = "dry_run", default_value = "0")]
     pub local_as: u32,
     /// Our BGP router ID
+    #[arg(required_unless_present = "dry_run", default_value = "0.0.0.0")]
     pub local_id: Ipv4Addr,
     /// Next hop for delegated IPv4 prefixes
     ///
@@ -18,7 +20,7 @@ pub struct DelegationFeed {
     /// support MP-BGP and Extended Next Hop.
     ///
     /// Defaults to the local ID if not specified.
-    #[arg(short, long)]
+    #[arg(short = 'n', long)]
     pub next_hop: Option<IpAddr>,
     /// BGP session listen address
     #[arg(short = 'l', long, default_value = "::")]
@@ -33,11 +35,14 @@ pub struct DelegationFeed {
     #[arg(short = '6', long)]
     pub enable_ipv6: bool,
     /// Interval in minutes to update the database
-    #[arg(short, long, default_value = "60")]
+    #[arg(short = 'u', long, default_value = "60")]
     pub update_interval: u64,
     /// Countries of which prefixes are advertised
     pub countries: Vec<CountrySpec>,
     /// Verbose mode
-    #[arg(short, long)]
+    #[arg(short = 'v', long)]
     pub verbose: bool,
+    /// Dry-run mode: download, parse, and print the routes, then exit
+    #[arg(short = 'i', long)]
+    pub dry_run: bool,
 }
