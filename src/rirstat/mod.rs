@@ -88,49 +88,59 @@ impl DatabaseDiff {
         }
     }
 
-    /// Create a diff between two databases
-    pub fn from_databases(old: &Database, new: &Database) -> Self {
+    /// Compute the diff between two databases
+    pub fn compute_diff(old: &Database, new: &Database, updated_rirs: &HashSet<RirName>) -> Self {
         let mut diff = Self::default();
         for (country, prefixes) in &new.ipv4_prefixes {
-            match old.ipv4_prefixes.get(country) {
-                Some(old_prefixes) => {
-                    let new_prefixes = prefixes
-                        .iter()
-                        .filter(|prefix| !old_prefixes.contains(prefix))
-                        .copied()
-                        .collect();
-                    diff.new_ipv4.insert(*country, new_prefixes);
-                    let withdrawn_prefixes = old_prefixes
-                        .iter()
-                        .filter(|prefix| !prefixes.contains(prefix))
-                        .copied()
-                        .collect();
-                    diff.withdrawn_ipv4.insert(*country, withdrawn_prefixes);
-                }
-                None => {
-                    diff.new_ipv4.insert(*country, prefixes.clone());
-                }
+            if !updated_rirs.contains(&country.rir()) {
+                // This country was not updated
+                continue;
+            }
+            let old_prefixes = old.ipv4_prefixes.get(country);
+            let new_prefixes: Vec<Cidr4> = prefixes
+                .iter()
+                // Keep those that are not in the old prefixes
+                .filter(|prefix| old_prefixes.map_or(true, |p| !p.contains(prefix)))
+                .copied()
+                .collect();
+            let withdrawn_prefixes: Vec<Cidr4> = old_prefixes.map_or(vec![], |p| {
+                p.iter()
+                    // Keep those that are not in the new prefixes
+                    .filter(|prefix| !prefixes.contains(prefix))
+                    .copied()
+                    .collect()
+            });
+            if !new_prefixes.is_empty() {
+                diff.new_ipv4.insert(*country, new_prefixes);
+            }
+            if !withdrawn_prefixes.is_empty() {
+                diff.withdrawn_ipv4.insert(*country, withdrawn_prefixes);
             }
         }
         for (country, prefixes) in &new.ipv6_prefixes {
-            match old.ipv6_prefixes.get(country) {
-                Some(old_prefixes) => {
-                    let new_prefixes = prefixes
-                        .iter()
-                        .filter(|prefix| !old_prefixes.contains(prefix))
-                        .copied()
-                        .collect();
-                    diff.new_ipv6.insert(*country, new_prefixes);
-                    let withdrawn_prefixes = old_prefixes
-                        .iter()
-                        .filter(|prefix| !prefixes.contains(prefix))
-                        .copied()
-                        .collect();
-                    diff.withdrawn_ipv6.insert(*country, withdrawn_prefixes);
-                }
-                None => {
-                    diff.new_ipv6.insert(*country, prefixes.clone());
-                }
+            if !updated_rirs.contains(&country.rir()) {
+                // This country was not updated
+                continue;
+            }
+            let old_prefixes = old.ipv6_prefixes.get(country);
+            let new_prefixes: Vec<Cidr6> = prefixes
+                .iter()
+                // Keep those that are not in the old prefixes
+                .filter(|prefix| old_prefixes.map_or(true, |p| !p.contains(prefix)))
+                .copied()
+                .collect();
+            let withdrawn_prefixes: Vec<Cidr6> = old_prefixes.map_or(vec![], |p| {
+                p.iter()
+                    // Keep those that are not in the new prefixes
+                    .filter(|prefix| !prefixes.contains(prefix))
+                    .copied()
+                    .collect()
+            });
+            if !new_prefixes.is_empty() {
+                diff.new_ipv6.insert(*country, new_prefixes);
+            }
+            if !withdrawn_prefixes.is_empty() {
+                diff.withdrawn_ipv6.insert(*country, withdrawn_prefixes);
             }
         }
         diff
@@ -168,18 +178,24 @@ impl Database {
     }
 
     /// Update the database with a new country's statistics.
-    pub fn update_all(&mut self) -> Result<(), Error> {
+    pub fn update_all(&mut self) -> Result<HashSet<RirName>, Error> {
         let needed_rirs = self.needed_rirs();
+        let mut updated = HashSet::new();
         log::info!("Updating from RIRs: {:?}", needed_rirs);
         for rir in needed_rirs {
             let url = RIR_INFO[&rir];
             let response = ureq::get(url).call().map_err(Box::new)?;
             match response.status() {
-                200 => self.update_from_response(response, rir)?,
+                200 => {
+                    if self.update_from_response(response, rir)? {
+                        log::info!("Updated database with {rir}");
+                        updated.insert(rir);
+                    }
+                }
                 status => return Err(Error::HttpStatus(status)),
             }
         }
-        Ok(())
+        Ok(updated)
     }
 
     /// Update the database with a new country's statistics.
@@ -189,38 +205,64 @@ impl Database {
             self.enable_ipv4,
             self.enable_ipv6,
         );
-        new_db.update_all()?;
-        let diff = DatabaseDiff::from_databases(self, &new_db);
-        *self = new_db;
+        // Copy the serial numbers from the old database
+        new_db.serial_numbers.clone_from(&self.serial_numbers);
+        let updated_rirs = new_db.update_all()?;
+        let diff = DatabaseDiff::compute_diff(self, &new_db, &updated_rirs);
+        let old_db = std::mem::replace(self, new_db);
+        // Insert unaffected countries back into the new database
+        for (country, prefixes) in old_db.ipv4_prefixes {
+            if !updated_rirs.contains(&country.rir()) {
+                self.ipv4_prefixes.insert(country, prefixes);
+            }
+        }
+        for (country, prefixes) in old_db.ipv6_prefixes {
+            if !updated_rirs.contains(&country.rir()) {
+                self.ipv6_prefixes.insert(country, prefixes);
+            }
+        }
         Ok(diff)
     }
 
     /// Parse the response from a ureq request
+    ///
+    /// # Returns
+    /// - Ok(true) if the database was updated.
+    /// - Ok(false) if the database was already up-to-date.
+    /// - Err(_) if the response was invalid.
     fn update_from_response(
         &mut self,
         response: ureq::Response,
         expected_rir: RirName,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         let reader = std::io::BufReader::new(response.into_reader());
         let mut lines = reader.lines().enumerate();
         // Find the header line
         for (_, line) in &mut lines {
             if let Some(serial) = Self::check_header(&line?, expected_rir)? {
-                if self.serial_numbers.get(&expected_rir) == Some(&serial) {
+                let prev_serial = self.serial_numbers.get(&expected_rir);
+                log::info!(
+                    "Found serial number {serial} for {expected_rir}, previous: {prev_serial:?}"
+                );
+                if prev_serial == Some(&serial) {
                     log::info!("Already up-to-date with {expected_rir}");
-                    return Ok(());
+                    return Ok(false);
                 }
                 self.serial_numbers.insert(expected_rir, serial);
                 break;
             }
         }
+        log::info!(
+            "New serial number is {}",
+            self.serial_numbers[&expected_rir]
+        );
         for (n, line) in lines {
             self.update_from_line(&line?);
             if n % 10000 == 0 {
                 log::info!("Processed {n} lines from {expected_rir}");
             }
         }
-        Ok(())
+        Ok(true)
     }
 
     /// Parse and check the header of a RIR statistics file
@@ -315,16 +357,6 @@ impl Database {
                 }
             }
         }
-    }
-
-    /// Consumes the database and returns the country to CIDR maps
-    pub fn into_prefixes(
-        self,
-    ) -> (
-        HashMap<CountrySpec, Vec<Cidr4>>,
-        HashMap<CountrySpec, Vec<Cidr6>>,
-    ) {
-        (self.ipv4_prefixes, self.ipv6_prefixes)
     }
 }
 

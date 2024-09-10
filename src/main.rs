@@ -21,37 +21,25 @@ fn setup_logger(level: log::LevelFilter) {
 }
 
 async fn handle_session(
-    init_db: Database,
     recv_updates: broadcast::Receiver<DatabaseDiff>,
     socket: tokio::net::TcpStream,
     local_as: u32,
     local_id: std::net::Ipv4Addr,
     next_hop: std::net::IpAddr,
 ) {
-    let (ipv4_routes, ipv6_routes) = init_db.into_prefixes();
-    let init_ipv4_routes = Some(ipv4_routes.into_values().flatten().into());
-    let init_ipv6_routes = Some(ipv6_routes.into_values().flatten().into());
-    let mut session = Feeder::new(
-        init_ipv4_routes,
-        init_ipv6_routes,
-        recv_updates,
-        socket,
-        local_as,
-        local_id,
-        next_hop,
-    );
+    let mut session = Feeder::new(recv_updates, socket, local_as, local_id, next_hop);
     if let Err(e) = session.idle().await {
         log::error!("Session error: {:?}", e);
     }
 }
 
 fn updater(
-    mut init_db: Database,
+    mut db: Database,
     send_updates: &broadcast::Sender<DatabaseDiff>,
     update_interval: std::time::Duration,
 ) {
     loop {
-        let diff = init_db.update_with_diff().unwrap_or_else(|e| {
+        let diff = db.update_with_diff().unwrap_or_else(|e| {
             log::error!("Database update failed: {:?}", e);
             DatabaseDiff::default()
         });
@@ -78,12 +66,11 @@ async fn main() {
     let local_id = args.local_id;
     let next_hop = args.next_hop.unwrap_or_else(|| local_id.into());
     let update_interval = std::time::Duration::from_secs(args.update_interval * 60);
-    db.update_all().expect("Initial database update failed");
     let socket = tokio::net::TcpListener::bind((args.listen_addr, args.listen_port))
         .await
         .expect("Failed to bind to listen address");
     let (send_updates, mut recv_updates) = broadcast::channel(16);
-    let updater_copy = dbg!(db.clone());
+    let updater_copy = db.clone();
     tokio::task::spawn_blocking(move || {
         updater(updater_copy, &send_updates, update_interval);
     });
@@ -91,7 +78,7 @@ async fn main() {
         let sub_recv_updates = recv_updates.resubscribe();
         tokio::select! {
             Ok((socket, _)) = socket.accept() => {
-                tokio::spawn(handle_session(db.clone(), sub_recv_updates, socket, local_as, local_id, next_hop));
+                tokio::spawn(handle_session(sub_recv_updates, socket, local_as, local_id, next_hop));
             }
             diff = recv_updates.recv() => {
                 if let Ok(diff) = diff {
