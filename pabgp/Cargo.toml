@@ -1,6 +1,6 @@
 [package]
 name = "pabgp"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Zhang Maiyun <me@maiyun.me>"]
 edition = "2021"
 description = "A pretty average BGP implementation"
