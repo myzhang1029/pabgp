@@ -277,17 +277,27 @@ impl Feeder {
         loop {
             tokio::select! {
                 diffres = self.recv_updates.recv() => {
-                    // Send UPDATE
                     log::info!("Received database update");
                     let diff = diffres.expect("Database updater task exited");
+                    let new_ipv4: pabgp::route::Routes = diff.new_ipv4.values().flatten().into();
+                    let new_ipv6: pabgp::route::Routes = diff.new_ipv6.values().flatten().into();
+                    let withdrawn_ipv4: pabgp::route::Routes = diff.withdrawn_ipv4.values().flatten().into();
+                    let withdrawn_ipv6: pabgp::route::Routes = diff.withdrawn_ipv6.values().flatten().into();
+                    log::info!(
+                        "Database update: {} new IPv4, {} new IPv6, {} withdrawn IPv4, {} withdrawn IPv6",
+                        new_ipv4.len(),
+                        new_ipv6.len(),
+                        withdrawn_ipv4.len(),
+                        withdrawn_ipv6.len()
+                    );
                     let packets = UpdateBuilder::new(self.enable_mp_bgp)
                         .set_next_hop(self.next_hop.into())
                         .set_origin(Origin::Igp)
                         .set_as_path(AsSegmentType::AsSequence, vec![self.local_as])
-                        .add_ipv4_routes(diff.new_ipv4.values().flatten().into())
-                        .add_ipv6_routes(diff.new_ipv6.values().flatten().into())
-                        .withdraw_ipv4_routes(diff.withdrawn_ipv4.values().flatten().into())
-                        .withdraw_ipv6_routes(diff.withdrawn_ipv6.values().flatten().into())
+                        .add_ipv4_routes(new_ipv4)
+                        .add_ipv6_routes(new_ipv6)
+                        .withdraw_ipv4_routes(withdrawn_ipv4)
+                        .withdraw_ipv6_routes(withdrawn_ipv6)
                         .build()?;
                     for packet in packets {
                         self.tx.feed(Message::Update(packet)).await?;
