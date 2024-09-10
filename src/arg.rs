@@ -37,4 +37,7 @@ pub struct DelegationFeed {
     pub update_interval: u64,
     /// Countries of which prefixes are advertised
     pub countries: Vec<CountrySpec>,
+    /// Verbose mode
+    #[arg(short, long)]
+    pub verbose: bool,
 }

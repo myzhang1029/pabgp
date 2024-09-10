@@ -7,12 +7,12 @@ use rirstat::{Database, DatabaseDiff};
 use session::Feeder;
 use tokio::sync::broadcast;
 
-fn setup_logger() {
+fn setup_logger(level: log::LevelFilter) {
     let config = simplelog::ConfigBuilder::new()
         .set_time_format_rfc3339()
         .build();
     simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
+        level,
         config,
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
@@ -67,8 +67,12 @@ fn updater(
 
 #[tokio::main]
 async fn main() {
-    setup_logger();
     let args = arg::DelegationFeed::parse();
+    setup_logger(if args.verbose {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    });
     let mut db = Database::new(args.countries.clone(), args.enable_ipv4, args.enable_ipv6);
     let local_as = args.local_as;
     let local_id = args.local_id;

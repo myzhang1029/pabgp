@@ -5,7 +5,7 @@
 use crate::rirstat::DatabaseDiff;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use pabgp::capability::{self, Capabilities, CapabilitiesBuilder};
+use pabgp::capability::{self, Afi, Capabilities, CapabilitiesBuilder, Safi};
 use pabgp::path::{AsSegmentType, Origin};
 use pabgp::route::Routes;
 use pabgp::{
@@ -76,12 +76,13 @@ impl Feeder {
     }
 
     pub async fn idle(&mut self) -> Result<(), Error> {
-        // State = Idle
+        log::debug!("Idle state");
         let packet = self.rx.next().await.ok_or(Error::Io(std::io::Error::new(
             std::io::ErrorKind::UnexpectedEof,
             "EOF",
         )))??;
         if let Message::Open(open) = packet {
+            log::trace!("Peer OPEN message: {open:?}");
             let peer_version = open.version;
             let peer_asn = open.asn;
             let peer_hold_time = open.hold_time;
@@ -107,7 +108,22 @@ impl Feeder {
             log::debug!("Peer advertised capability: {cap:?}");
         }
         // Whether the peer supports passing routes in a MP_* path attribute
-        self.enable_mp_bgp = self.peer_caps.has_mp_ipv4_unicast() || self.peer_caps.has_mp_ipv6_unicast();
+        self.enable_mp_bgp =
+            self.peer_caps.has_mp_ipv4_unicast() || self.peer_caps.has_mp_ipv6_unicast();
+        if !self
+            .peer_caps
+            .has_extended_next_hop(Afi::Ipv6, Safi::Unicast, Afi::Ipv4)
+            && self.next_hop.is_ipv4()
+        {
+            log::warn!("Peer does not support IPv4 next-hop in IPv6 routes");
+        }
+        if !self
+            .peer_caps
+            .has_extended_next_hop(Afi::Ipv4, Safi::Unicast, Afi::Ipv6)
+            && self.next_hop.is_ipv6()
+        {
+            log::warn!("Peer does not support IPv6 next-hop in IPv4 routes");
+        }
     }
 
     async fn connect(
@@ -118,7 +134,7 @@ impl Feeder {
         peer_bgp_id: std::net::Ipv4Addr,
         mut peer_opt_params: capability::OptionalParameters,
     ) -> Result<(), Error> {
-        // State = Connect
+        log::debug!("Connect state");
         log::info!("Connection from peer (ASN: {peer_asn}, BGP ID: {peer_bgp_id})");
         if peer_version != BGP_VERSION {
             log::warn!("Peer version mismatch: expected {BGP_VERSION}, got {peer_version}");
@@ -161,7 +177,7 @@ impl Feeder {
     }
 
     async fn open_sent_confirm(&mut self) -> Result<(), Error> {
-        // State = OpenSent
+        log::debug!("OpenSent state");
         let packet = self.rx.next().await.ok_or(Error::Io(std::io::Error::new(
             std::io::ErrorKind::UnexpectedEof,
             "EOF",
@@ -169,7 +185,7 @@ impl Feeder {
         match packet {
             Message::Keepalive => {
                 log::info!("Received KEEPALIVE message from peer");
-                // State = OpenConfirm
+                log::debug!("OpenConfirm state");
                 // Just send the exact same message back
                 self.tx.feed(packet).await?;
                 self.tx.flush().await?;
@@ -243,6 +259,7 @@ impl Feeder {
             )
             .build()?;
         for packet in packets {
+            log::trace!("Sending initial route packet: {packet:?}");
             self.tx.feed(Message::Update(packet)).await?;
         }
         self.tx.flush().await?;
@@ -251,7 +268,7 @@ impl Feeder {
     }
 
     async fn established(&mut self) -> Result<(), Error> {
-        // State = Established
+        log::debug!("Established state");
         log::info!("Peer connection established");
         self.send_initial_updates().await?;
         loop {
