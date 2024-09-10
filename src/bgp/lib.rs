@@ -1,4 +1,4 @@
-//! BGP packet structures
+//! PABGP -- The pretty average BGP implementation
 //!
 //! Structs here intends to represent the data instead of the on-wire format.
 
@@ -17,7 +17,6 @@ pub use capability::Safi;
 pub use endec::{BgpCodec as Codec, Error};
 pub use update_builder::UpdateBuilder;
 
-use crate::check_remaining_len;
 use bytes::{Buf, BufMut};
 use capability::{Capabilities, OptionalParameters};
 use endec::Component;
@@ -85,17 +84,14 @@ impl Component for Open {
 
 impl Open {
     /// Create a new BGP open message
+    #[must_use]
     pub fn new_easy(
         asn: u32,
         hold_time: u16,
         bgp_id: Ipv4Addr,
         capabilities: Capabilities,
     ) -> Self {
-        let oldbgp_asn = if asn > u32::from(u16::MAX) {
-            AS_TRANS
-        } else {
-            u16::try_from(asn).expect("Impossible to overflow")
-        };
+        let oldbgp_asn = u16::try_from(asn).unwrap_or(AS_TRANS);
         Self {
             version: BGP_VERSION,
             asn: oldbgp_asn,

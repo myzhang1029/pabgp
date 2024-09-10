@@ -6,7 +6,7 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use super::{
+use crate::{
     check_remaining_len,
     endec::{self, Component},
 };
@@ -397,11 +397,13 @@ pub struct CapabilitiesBuilder {
 
 impl CapabilitiesBuilder {
     /// Create a new capabilities builder
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Add a multi-protocol capability
+    #[must_use]
     pub fn multi_protocol(mut self, afi: Afi, safi: Safi) -> Self {
         self.data
             .push(Value::MultiProtocol(MultiProtocol { afi, safi }));
@@ -409,28 +411,33 @@ impl CapabilitiesBuilder {
     }
 
     /// Shortcut for adding an IPv4 unicast multi-protocol capability
+    #[must_use]
     pub fn mp_ipv4_unicast(self) -> Self {
         self.multi_protocol(Afi::Ipv4, Safi::Unicast)
     }
 
     /// Shortcut for adding an IPv6 unicast multi-protocol capability
+    #[must_use]
     pub fn mp_ipv6_unicast(self) -> Self {
         self.multi_protocol(Afi::Ipv6, Safi::Unicast)
     }
 
     /// Add a route refresh capability
+    #[must_use]
     pub fn route_refresh(mut self) -> Self {
         self.data.push(Value::RouteRefresh);
         self
     }
 
     /// Add an extended next hop capability
+    #[must_use]
     pub fn extended_next_hop(mut self, value: ExtendedNextHop) -> Self {
         self.extended_next_hops.extend(value.0);
         self
     }
 
     /// Shortcut for adding a IPv4-over-IPv6 extended next hop capability
+    #[must_use]
     pub fn enh_ipv4_over_ipv6(mut self) -> Self {
         self.extended_next_hops.push(ExtendedNextHopValue {
             afi: Afi::Ipv4,
@@ -441,6 +448,7 @@ impl CapabilitiesBuilder {
     }
 
     /// Shortcut for adding a IPv6-over-IPv4 extended next hop capability
+    #[must_use]
     pub fn enh_ipv6_over_ipv4(mut self) -> Self {
         self.extended_next_hops.push(ExtendedNextHopValue {
             afi: Afi::Ipv6,
@@ -451,6 +459,7 @@ impl CapabilitiesBuilder {
     }
 
     /// Add a four-octet AS number capability
+    #[must_use]
     pub fn four_octet_as_number(mut self, asn: u32) -> Self {
         self.data
             .push(Value::FourOctetAsNumber(FourOctetAsNumber { asn }));
@@ -458,6 +467,7 @@ impl CapabilitiesBuilder {
     }
 
     /// Add a four-octet AS number capability if the AS number is greater than 65535
+    #[must_use]
     pub fn four_octet_as_number_if_needed(self, asn: u32) -> Self {
         if asn > u32::from(u16::MAX) {
             self.four_octet_as_number(asn)
@@ -467,12 +477,14 @@ impl CapabilitiesBuilder {
     }
 
     /// Add an unsupported capability
+    #[must_use]
     pub fn other(mut self, code: u8, data: Bytes) -> Self {
         self.data.push(Value::Unsupported(code, data));
         self
     }
 
     /// Build the capabilities
+    #[must_use]
     pub fn build(self) -> Capabilities {
         let extended_next_hops = ExtendedNextHop(self.extended_next_hops);
         let mut data = self.data;

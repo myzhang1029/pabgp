@@ -5,8 +5,8 @@
 
 pub mod rirbase;
 
-use crate::bgp::cidr::{Cidr, Cidr4, Cidr6};
 use lazy_static::lazy_static;
+use pabgp::cidr::{Cidr, Cidr4, Cidr6};
 use rirbase::{CountrySpec, RirName};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

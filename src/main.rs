@@ -1,5 +1,4 @@
 mod arg;
-mod bgp;
 mod rirstat;
 mod session;
 

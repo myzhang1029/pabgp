@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use super::{
+use crate::{
     capability::{Afi, Safi},
     endec::Component,
     route::Routes,
@@ -160,21 +160,25 @@ impl Flags {
     pub const OPTIONAL_TRANSITIVE_EXTENDED: Flags = Flags(0b1001_0000);
 
     /// Check if the attribute is optional
+    #[must_use]
     pub const fn is_optional(self) -> bool {
         self.0 & 0x80 == 0
     }
 
     /// Check if the attribute is transitive
+    #[must_use]
     pub const fn is_transitive(self) -> bool {
         self.0 & 0x40 != 0
     }
 
     /// Check if the attribute is partial
+    #[must_use]
     pub const fn is_partial(self) -> bool {
         self.0 & 0x20 != 0
     }
 
     /// Check if the attribute is extended length
+    #[must_use]
     pub const fn is_extended_length(self) -> bool {
         self.0 & 0x10 != 0
     }
@@ -547,7 +551,7 @@ impl Component for MpUnreachNlri {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgp::tests::hex_to_bytes;
+    use crate::tests::hex_to_bytes;
 
     #[test]
     fn test_origin() {
@@ -589,7 +593,7 @@ mod tests {
                 flags: Flags(0x40),
                 data: Data::AsPath(AsPath(vec![AsSegment {
                     type_: AsSegmentType::AsSequence,
-                    asns: vec![0xfcde39d1, 0xfcde3880, 0xfcde3122],
+                    asns: vec![0xfcde_39d1, 0xfcde_3880, 0xfcde_3122],
                     as4: true
                 }])),
             }

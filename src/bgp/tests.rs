@@ -12,11 +12,11 @@ use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 
 fn convert_one_hex_digit(c: u8) -> u8 {
-    if c >= b'0' && c <= b'9' {
+    if c.is_ascii_digit() {
         c - b'0'
-    } else if c >= b'a' && c <= b'f' {
+    } else if (b'a'..=b'f').contains(&c) {
         c - b'a' + 10
-    } else if c >= b'A' && c <= b'F' {
+    } else if (b'A'..=b'F').contains(&c) {
         c - b'A' + 10
     } else {
         panic!("invalid hex character: {}", c as char);
@@ -24,9 +24,9 @@ fn convert_one_hex_digit(c: u8) -> u8 {
 }
 
 pub fn hex_to_bytes(hex: &str) -> Bytes {
-    let hex = hex.as_bytes();
     // Skip these characters on octet boundary
     const SKIP: &[u8] = b" \t\n\r:.";
+    let hex = hex.as_bytes();
     let mut octets = BytesMut::with_capacity(hex.len() / 2);
     let mut i = 0;
     while i < hex.len() {
@@ -76,9 +76,8 @@ fn test_open_message_wsh_1() {
     let mut bmut = data.clone().into();
     let mut codec = BgpCodec;
     let msg = codec.decode(&mut bmut).unwrap().unwrap();
-    let msg = match msg {
-        Message::Open(msg) => msg,
-        _ => panic!("unexpected message type"),
+    let Message::Open(msg) = msg else {
+        panic!("unexpected message type");
     };
     assert_eq!(msg.version, 4);
     assert_eq!(msg.asn, 64893);
@@ -105,12 +104,10 @@ fn test_open_message_wsh_2() {
     assert_eq!(msg.asn, AS_TRANS);
     assert_eq!(msg.hold_time, 240);
     assert_eq!(msg.bgp_id, Ipv4Addr::new(172, 23, 6, 162));
-    let cap = match &msg.opt_params.get(0).unwrap() {
-        OptionalParameterValue::Capabilities(cap) => cap,
-    };
+    let OptionalParameterValue::Capabilities(cap) = &msg.opt_params.first().unwrap();
     assert_eq!(cap.len(), 9);
     assert_eq!(
-        *cap.get(0).unwrap(),
+        *cap.first().unwrap(),
         capability::Value::MultiProtocol(MultiProtocol {
             afi: Afi::Ipv4,
             safi: Safi::Unicast,
@@ -139,7 +136,7 @@ fn test_open_message_wsh_2() {
     );
     assert_eq!(
         *cap.get(6).unwrap(),
-        capability::Value::FourOctetAsNumber(FourOctetAsNumber { asn: 4242420893 })
+        capability::Value::FourOctetAsNumber(FourOctetAsNumber { asn: 4_242_420_893 })
     );
     assert_eq!(
         *cap.get(7).unwrap(),
@@ -179,7 +176,7 @@ fn test_update_message_wsh_1() {
     assert_eq!(msg.withdrawn_routes.len(), 0);
     assert_eq!(msg.path_attributes.len(), 4);
     assert_eq!(
-        *msg.path_attributes.get(0).unwrap(),
+        *msg.path_attributes.first().unwrap(),
         path::Value {
             flags: path::Flags(0x40),
             data: path::Data::Origin(Origin::Igp),
@@ -246,14 +243,13 @@ fn test_update_message_wsh_2() {
     let mut bmut = data.clone().into();
     let mut codec = BgpCodec;
     let msg = codec.decode(&mut bmut).unwrap().unwrap();
-    let msg = match msg {
-        Message::Update(msg) => msg,
-        _ => panic!("unexpected message type"),
+    let Message::Update(msg) = msg else {
+        panic!("unexpected message type");
     };
     assert_eq!(msg.withdrawn_routes.len(), 0);
     assert_eq!(msg.path_attributes.len(), 6);
     assert_eq!(
-        *msg.path_attributes.get(0).unwrap(),
+        *msg.path_attributes.first().unwrap(),
         path::Value {
             flags: path::Flags(0x90),
             data: path::Data::MpReachNlri(MpReachNlri {
@@ -284,7 +280,7 @@ fn test_update_message_wsh_2() {
             flags: path::Flags(0x40),
             data: path::Data::AsPath(AsPath(vec![AsSegment {
                 type_: AsSegmentType::AsSequence,
-                asns: vec![0xfcde39d1, 0xfcde3880, 0xfcde3122],
+                asns: vec![0xfcde_39d1, 0xfcde_3880, 0xfcde_3122],
                 as4: true,
             }])),
         }
@@ -333,9 +329,8 @@ fn test_notification_message_wsh_1() {
     let mut bmut = data.clone().into();
     let mut codec = BgpCodec;
     let msg = codec.decode(&mut bmut).unwrap().unwrap();
-    let msg = match msg {
-        Message::Notification(msg) => msg,
-        _ => panic!("unexpected message type"),
+    let Message::Notification(msg) = msg else {
+        panic!("unexpected message type");
     };
     assert_eq!(msg.error_code, NotificationErrorCode::Cease);
     assert_eq!(

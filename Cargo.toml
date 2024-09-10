@@ -14,6 +14,10 @@ categories = ["network-programming"]
 name = "delegation-feed"
 path = "src/main.rs"
 
+[lib]
+name = "pabgp"
+path = "src/bgp/lib.rs"
+
 [features]
 test-real-internet = []
 

@@ -25,6 +25,7 @@ pub struct UpdateBuilder {
 
 impl UpdateBuilder {
     /// Create a new builder.
+    #[must_use]
     pub fn new(enable_mp_bgp: bool) -> Self {
         Self {
             enable_mp_bgp,
@@ -33,18 +34,21 @@ impl UpdateBuilder {
     }
 
     /// Withdraw some IPv4 routes.
+    #[must_use]
     pub fn withdraw_ipv4_routes(mut self, routes: Routes) -> Self {
         self.withdrawn_ipv4_routes = routes;
         self
     }
 
     /// Withdraw some IPv6 routes.
+    #[must_use]
     pub fn withdraw_ipv6_routes(mut self, routes: Routes) -> Self {
         self.withdrawn_ipv6_routes = routes;
         self
     }
 
     /// Withdraw a single route.
+    #[must_use]
     pub fn withdraw_route(mut self, route: Cidr) -> Self {
         match route {
             Cidr::V4(route) => self.withdrawn_ipv4_routes.0.push(route.into()),
@@ -54,18 +58,21 @@ impl UpdateBuilder {
     }
 
     /// Add some IPv4 routes.
+    #[must_use]
     pub fn add_ipv4_routes(mut self, routes: Routes) -> Self {
         self.nlri_ipv4_routes = routes;
         self
     }
 
     /// Add some IPv6 routes.
+    #[must_use]
     pub fn add_ipv6_routes(mut self, routes: Routes) -> Self {
         self.nlri_ipv6_routes = routes;
         self
     }
 
     /// Add a single route.
+    #[must_use]
     pub fn add_route(mut self, route: Cidr) -> Self {
         match route {
             Cidr::V4(route) => self.nlri_ipv4_routes.0.push(route.into()),
@@ -75,12 +82,14 @@ impl UpdateBuilder {
     }
 
     /// Set the origin.
+    #[must_use]
     pub fn set_origin(mut self, origin: Origin) -> Self {
         self.origin = Some(origin);
         self
     }
 
     /// Add an AS path segment.
+    #[must_use]
     pub fn set_as_path(mut self, type_: AsSegmentType, asns: Vec<u32>) -> Self {
         let as4 = asns.iter().any(|&asn| asn > u32::from(u16::MAX));
         let segment = AsSegment { type_, asns, as4 };
@@ -89,12 +98,14 @@ impl UpdateBuilder {
     }
 
     /// Set the next hop.
+    #[must_use]
     pub fn set_next_hop(mut self, next_hop: MpNextHop) -> Self {
         self.next_hop = Some(next_hop);
         self
     }
 
     /// Add a path attribute.
+    #[must_use]
     pub fn path_attribute(mut self, attr: path::Value) -> Self {
         self.other_path_attrs.0.push(attr);
         self

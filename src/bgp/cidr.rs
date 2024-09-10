@@ -21,10 +21,16 @@ impl fmt::Display for Cidr4 {
     }
 }
 impl Cidr4 {
+    #[must_use]
     pub fn new(addr: Ipv4Addr, prefix_len: u8) -> Self {
         Self { addr, prefix_len }
     }
 
+    /// Create a new CIDR block from a starting address and the number of hosts
+    ///
+    /// # Panics
+    /// Will panic if the number of hosts is more than 2^32
+    #[must_use]
     pub fn from_num_hosts(start: Ipv4Addr, num_hosts: u32) -> Self {
         let prefix_len = u8::try_from(32 - num_hosts.ilog2()).expect("Invalid prefix length");
         Self {
@@ -48,6 +54,7 @@ impl fmt::Display for Cidr6 {
 }
 
 impl Cidr6 {
+    #[must_use]
     pub fn new(addr: Ipv6Addr, prefix_len: u8) -> Self {
         Self { addr, prefix_len }
     }
@@ -70,6 +77,7 @@ impl fmt::Display for Cidr {
 }
 
 impl Cidr {
+    #[must_use]
     pub fn into_parts(self) -> (IpAddr, u8) {
         match self {
             Cidr::V4(cidr) => (IpAddr::V4(cidr.addr), cidr.prefix_len),

@@ -2,16 +2,16 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::bgp::capability::{self, Capabilities, CapabilitiesBuilder};
-use crate::bgp::path::{AsSegmentType, Origin};
-use crate::bgp::route::Routes;
-use crate::bgp::{
-    Codec, Error as PacketError, Message, Notification, NotificationErrorCode, Open,
-    OpenMessageErrorSubcode, UpdateBuilder, BGP_VERSION,
-};
 use crate::rirstat::DatabaseDiff;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
+use pabgp::capability::{self, Capabilities, CapabilitiesBuilder};
+use pabgp::path::{AsSegmentType, Origin};
+use pabgp::route::Routes;
+use pabgp::{
+    Codec, Error as PacketError, Message, Notification, NotificationErrorCode, Open,
+    OpenMessageErrorSubcode, UpdateBuilder, BGP_VERSION,
+};
 use tokio::net::{tcp, TcpStream};
 use tokio::sync::broadcast;
 use tokio_util::codec::{FramedRead, FramedWrite};
@@ -27,7 +27,7 @@ pub enum Error {
     #[error("peer sent an unexpected message")]
     UnexpectedMessage,
     #[error("peer sent a notification: {:?}({}), data: {:?}", .0.error_code, .0.error_subcode, .0.data)]
-    PeerNotification(crate::bgp::Notification),
+    PeerNotification(pabgp::Notification),
 }
 
 /// A simple passive BGP speaker

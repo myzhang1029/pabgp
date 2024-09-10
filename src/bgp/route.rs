@@ -85,6 +85,7 @@ impl Routes {
     /// If no split is required, the result will be `vec![len]`.
     /// However, if the routes are too large to encode in the allowed size,
     /// the result will be an empty vector.
+    #[must_use]
     pub fn split_routes_to_allowed_size_each(&self, allowed_size: usize) -> Vec<usize> {
         // The algorithm is to exponentially decrease the number of routes
         // to keep in each iteration to fit one set. For the next set, the
@@ -116,6 +117,7 @@ impl Routes {
     /// left boundary of each split instead of the right boundary and
     /// reverses the order of the split points. This is useful for
     /// calling `Vec::split_off` without having to offset the split points.
+    #[must_use]
     pub fn split_routes_to_allowed_size_rev(&self, allowed_size: usize) -> Vec<usize> {
         let mut split_points = self.split_routes_to_allowed_size_each(allowed_size);
         // Remove tail and add 0 and reverse in place
@@ -180,7 +182,7 @@ impl From<Cidr> for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bgp::tests::hex_to_bytes;
+    use crate::tests::hex_to_bytes;
     use bytes::BytesMut;
 
     #[test]
@@ -458,7 +460,7 @@ mod tests {
                     let this_seg = &routes.0[start..end];
                     log::debug!("Split with {}..{}: len={}", start, end, this_seg.len());
                     assert!(Routes::slice_encoded_len(this_seg) <= allowed_size);
-                    new_routes.extend_from_slice(&this_seg);
+                    new_routes.extend_from_slice(this_seg);
                     start = end;
                 }
                 assert_eq!(new_routes, routes.0);
