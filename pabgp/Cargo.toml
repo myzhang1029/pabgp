@@ -1,0 +1,32 @@
+[package]
+name = "pabgp"
+version = "0.1.0"
+authors = ["Zhang Maiyun <me@maiyun.me>"]
+edition = "2021"
+description = "A pretty average BGP implementation"
+readme = "README.md"
+repository = "https://github.com/myzhang1029/pabgp"
+license = "AGPL-3.0-or-later"
+keywords = ["bgp", "networking", "routing"]
+categories = ["network-programming"]
+
+[lib]
+name = "pabgp"
+path = "lib.rs"
+
+[features]
+default = ["impl-serde", "tokio-endec"]
+# Derive serde::{Serialize, Deserialize} on lib types
+impl-serde = ["serde"]
+# BGP Codec for use with tokio-util
+tokio-endec = ["tokio-util"]
+
+[dependencies]
+bytes = "1"
+enum-primitive-derive = "0.3"
+futures-util = { version = "0.3", features = ["sink"] }
+log = "0.4"
+num-traits = "0.2"
+serde = { version = "1", features = ["derive"], optional = true }
+thiserror = "1"
+tokio-util = { version = "0.7", features = ["codec"], optional = true }

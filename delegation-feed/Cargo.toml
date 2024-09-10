@@ -1,0 +1,35 @@
+[package]
+name = "delegation-feed"
+version = "0.1.0"
+authors = ["Zhang Maiyun <me@maiyun.me>"]
+edition = "2021"
+description = "Fetch and parse RIR delegation files and feed the data through BGP"
+readme = "README.md"
+repository = "https://github.com/myzhang1029/pabgp"
+license = "AGPL-3.0-or-later"
+keywords = ["bgp", "networking", "routing"]
+categories = ["network-programming"]
+
+[[bin]]
+name = "delegation-feed"
+path = "main.rs"
+
+[features]
+default = ["test-real-internet"]
+test-real-internet = []
+
+[dependencies]
+bytes = "1"
+clap = { version = "4.5.17", features = ["derive"]  }
+enum-primitive-derive = "0.3"
+futures-util = { version = "0.3", features = ["sink"] }
+lazy_static = "1"
+log = "0.4"
+num-traits = "0.2"
+pabgp = { path = "../pabgp" }
+serde = { version = "1", features = ["derive"] }
+simplelog = "0.12"
+thiserror = "1"
+tokio = { version = "^1, >=1.23.1", features = ["macros", "net", "rt", "rt-multi-thread", "sync", "time"] }
+tokio-util = "0.7"
+ureq = "2"
