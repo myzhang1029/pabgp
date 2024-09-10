@@ -7,6 +7,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use pabgp::capability::{self, Afi, Capabilities, CapabilitiesBuilder, Safi};
 use pabgp::path::{AsSegmentType, Origin};
+use pabgp::route::Routes;
 use pabgp::{
     Codec, Error as PacketError, Message, Notification, NotificationErrorCode, Open,
     OpenMessageErrorSubcode, UpdateBuilder, BGP_VERSION,
@@ -31,6 +32,8 @@ pub enum Error {
 
 /// A simple passive BGP speaker
 pub struct Feeder {
+    init_ipv4_routes: Option<Routes>,
+    init_ipv6_routes: Option<Routes>,
     recv_updates: broadcast::Receiver<DatabaseDiff>,
     local_as: u32,
     local_id: std::net::Ipv4Addr,
@@ -45,6 +48,8 @@ pub struct Feeder {
 
 impl Feeder {
     pub fn new(
+        init_ipv4_routes: Option<Routes>,
+        init_ipv6_routes: Option<Routes>,
         recv_updates: broadcast::Receiver<DatabaseDiff>,
         socket: TcpStream,
         local_as: u32,
@@ -56,6 +61,8 @@ impl Feeder {
         let rx = FramedRead::new(rx, codec);
         let tx = FramedWrite::new(tx, codec);
         Self {
+            init_ipv4_routes,
+            init_ipv6_routes,
             recv_updates,
             local_as,
             local_id,
@@ -238,32 +245,49 @@ impl Feeder {
         Ok(())
     }
 
+    async fn send_initial_updates(&mut self) -> Result<(), Error> {
+        let packets = UpdateBuilder::new(self.enable_mp_bgp)
+            .set_next_hop(self.next_hop.into())
+            .set_origin(Origin::Igp)
+            .set_as_path(AsSegmentType::AsSequence, vec![self.local_as])
+            .add_ipv4_routes(
+                self.init_ipv4_routes
+                    .take()
+                    .expect("Initial IPv4 routes not set"),
+            )
+            .add_ipv6_routes(
+                self.init_ipv6_routes
+                    .take()
+                    .expect("Initial IPv6 routes not set"),
+            )
+            .build()?;
+        for packet in packets {
+            log::trace!("Sending initial route packet: {packet:?}");
+            self.tx.feed(Message::Update(packet)).await?;
+        }
+        self.tx.flush().await?;
+        log::info!("Sent initial routes to peer");
+        Ok(())
+    }
+
     async fn established(&mut self) -> Result<(), Error> {
         log::debug!("Established state");
         log::info!("Peer connection established");
+        self.send_initial_updates().await?;
         loop {
             tokio::select! {
                 diffres = self.recv_updates.recv() => {
+                    // Send UPDATE
+                    log::info!("Received database update");
                     let diff = diffres.expect("Database updater task exited");
-                    let new_ipv4: pabgp::route::Routes = diff.new_ipv4.values().flatten().into();
-                    let new_ipv6: pabgp::route::Routes = diff.new_ipv6.values().flatten().into();
-                    let withdrawn_ipv4: pabgp::route::Routes = diff.withdrawn_ipv4.values().flatten().into();
-                    let withdrawn_ipv6: pabgp::route::Routes = diff.withdrawn_ipv6.values().flatten().into();
-                    log::info!(
-                        "Database update: {} new IPv4, {} new IPv6, {} withdrawn IPv4, {} withdrawn IPv6",
-                        new_ipv4.len(),
-                        new_ipv6.len(),
-                        withdrawn_ipv4.len(),
-                        withdrawn_ipv6.len()
-                    );
                     let packets = UpdateBuilder::new(self.enable_mp_bgp)
                         .set_next_hop(self.next_hop.into())
                         .set_origin(Origin::Igp)
                         .set_as_path(AsSegmentType::AsSequence, vec![self.local_as])
-                        .add_ipv4_routes(new_ipv4)
-                        .add_ipv6_routes(new_ipv6)
-                        .withdraw_ipv4_routes(withdrawn_ipv4)
-                        .withdraw_ipv6_routes(withdrawn_ipv6)
+                        .add_ipv4_routes(diff.new_ipv4.values().flatten().into())
+                        .add_ipv6_routes(diff.new_ipv6.values().flatten().into())
+                        .withdraw_ipv4_routes(diff.withdrawn_ipv4.values().flatten().into())
+                        .withdraw_ipv6_routes(diff.withdrawn_ipv6.values().flatten().into())
                         .build()?;
                     for packet in packets {
                         self.tx.feed(Message::Update(packet)).await?;

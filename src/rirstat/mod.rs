@@ -354,6 +354,16 @@ impl Database {
             }
         }
     }
+
+    /// Consumes the database and returns the country to CIDR maps
+    pub fn into_prefixes(
+        self,
+    ) -> (
+        HashMap<CountrySpec, Vec<Cidr4>>,
+        HashMap<CountrySpec, Vec<Cidr6>>,
+    ) {
+        (self.ipv4_prefixes, self.ipv6_prefixes)
+    }
 }
 
 #[cfg(test)]
