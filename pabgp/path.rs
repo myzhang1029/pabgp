@@ -546,11 +546,12 @@ impl Component for MpUnreachNlri {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hex_to_bytes;
+    use crate::{cidr::Cidr4, hex_to_bytes};
 
     #[test]
     fn test_origin() {
         let mut src = hex_to_bytes("40 01 01 00");
+        let saved = src.clone();
         let pa = Value::from_bytes(&mut src).unwrap();
         assert_eq!(
             pa,
@@ -559,11 +560,17 @@ mod tests {
                 data: Data::Origin(Origin::Igp),
             }
         );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
     }
 
     #[test]
-    fn test_as2_aspath() {
+    fn test_as2_aspath_wsh_1() {
         let mut src = hex_to_bytes("40 0204 0201 fd7d");
+        let saved = src.clone();
         let pa = Value::from_bytes(&mut src).unwrap();
         assert_eq!(
             pa,
@@ -576,11 +583,17 @@ mod tests {
                 }])),
             }
         );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
     }
 
     #[test]
-    fn test_as4_aspath() {
+    fn test_as4_aspath_wsh_1() {
         let mut src = hex_to_bytes("40 02 0e 0203 fcde39d1 fcde3880 fcde3122");
+        let saved = src.clone();
         let pa = Value::from_bytes(&mut src).unwrap();
         assert_eq!(
             pa,
@@ -593,11 +606,17 @@ mod tests {
                 }])),
             }
         );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
     }
 
     #[test]
     fn test_next_hop() {
         let mut src = hex_to_bytes("40 03 04 7f000001");
+        let saved = src.clone();
         let pa = Value::from_bytes(&mut src).unwrap();
         assert_eq!(
             pa,
@@ -606,11 +625,36 @@ mod tests {
                 data: Data::NextHop(Ipv4Addr::new(127, 0, 0, 1)),
             }
         );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
+    }
+
+    #[test]
+    fn test_multi_exit_disc_wsh_1() {
+        let mut src = hex_to_bytes("80 04 04 00000000");
+        let saved = src.clone();
+        let pa = Value::from_bytes(&mut src).unwrap();
+        assert_eq!(
+            pa,
+            Value {
+                flags: Flags(0x80),
+                data: Data::MultiExitDisc(0),
+            }
+        );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
     }
 
     #[test]
     fn test_as4path() {
         let mut src = hex_to_bytes("c0 11 06 0201 0000fd7d");
+        let saved = src.clone();
         let pa = Value::from_bytes(&mut src).unwrap();
         assert_eq!(
             pa,
@@ -623,5 +667,89 @@ mod tests {
                 }])),
             }
         );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
+    }
+
+    #[test]
+    fn test_mp_reach_nlri_wsh_1() {
+        let mut src = hex_to_bytes("90 0e 002a
+        0001 01 20 00000000000000000000000000000000 fe80000000000000000000000000abcd 0020 0a.7f.7f.7f");
+        let saved = src.clone();
+        let pa = Value::from_bytes(&mut src).unwrap();
+        assert_eq!(
+            pa,
+            Value {
+                flags: Flags(0x90),
+                data: Data::MpReachNlri(MpReachNlri {
+                    afi: Afi::Ipv4,
+                    safi: Safi::Unicast,
+                    next_hop: MpNextHop::V6AndLL(
+                        "::".parse().unwrap(),
+                        "fe80::abcd".parse().unwrap()
+                    ),
+                    nlri: Routes(vec![Cidr4::new(Ipv4Addr::new(10, 127, 127, 127), 32).into()])
+                }),
+            }
+        );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
+    }
+
+    #[test]
+    fn test_mp_unreach_nlri_wsh_1() {
+        let mut src = hex_to_bytes("90 0f 0007 0001 01 18 ac.17.e3");
+        let saved = src.clone();
+        let pa = Value::from_bytes(&mut src).unwrap();
+        assert_eq!(
+            pa,
+            Value {
+                flags: Flags(0x90),
+                data: Data::MpUnreachNlri(MpUnreachNlri {
+                    afi: Afi::Ipv4,
+                    safi: Safi::Unicast,
+                    withdrawn_routes: Routes(vec![
+                        Cidr4::new(Ipv4Addr::new(172, 23, 227, 0), 24).into()
+                    ])
+                }),
+            }
+        );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
+    }
+
+    #[test]
+    fn test_other_large_community_wsh_1() {
+        let mut src = hex_to_bytes(
+            "c0 20 24fcde31ef0000007800000014fcde31ef0000008200000001fcde31ef0000008c00000035",
+        );
+        let saved = src.clone();
+        let pa = Value::from_bytes(&mut src).unwrap();
+        assert_eq!(
+            pa,
+            Value {
+                flags: Flags(0xc0),
+                data: Data::Unsupported(
+                    0x20,
+                    hex_to_bytes(
+                        "fcde31ef0000007800000014fcde31ef0000008200000001fcde31ef0000008c00000035"
+                    )
+                ),
+            }
+        );
+        let encoded_len = pa.encoded_len();
+        let mut dst = bytes::BytesMut::new();
+        pa.to_bytes(&mut dst);
+        assert_eq!(dst, saved);
+        assert_eq!(encoded_len, dst.len());
     }
 }
