@@ -241,7 +241,7 @@ impl Database {
         for (_, line) in &mut lines {
             if let Some(serial) = Self::check_header(&line?, expected_rir)? {
                 let prev_serial = self.serial_numbers.get(&expected_rir);
-                log::info!(
+                log::debug!(
                     "Found serial number {serial} for {expected_rir}, previous: {prev_serial:?}"
                 );
                 if prev_serial == Some(&serial) {
@@ -252,10 +252,6 @@ impl Database {
                 break;
             }
         }
-        log::info!(
-            "New serial number is {}",
-            self.serial_numbers[&expected_rir]
-        );
         for (n, line) in lines {
             self.update_from_line(&line?);
             if n % 10000 == 0 {

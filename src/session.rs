@@ -148,9 +148,12 @@ impl Feeder {
             .enh_ipv4_over_ipv6()
             .four_octet_as_number_if_needed(self.local_as)
             .build();
+        // Make sure the peer hold time is longer than or equal to our hold time,
+        // so we don't have to worry about sending keepalives before they do it
+        // for us. (This is cheating, but it's a simple implementation)
         let open = Message::Open(Open::new_easy(
             self.local_as,
-            180,
+            180.min(peer_hold_time),
             self.local_id,
             capabilities,
         ));
