@@ -102,6 +102,14 @@ impl Feeder {
         }
     }
 
+    fn parse_peer_capabilities(&mut self) {
+        for cap in self.peer_caps.iter() {
+            log::debug!("Peer advertised capability: {cap:?}");
+        }
+        // Whether the peer supports passing routes in a MP_* path attribute
+        self.enable_mp_bgp = self.peer_caps.has_mp_ipv4_unicast() || self.peer_caps.has_mp_ipv6_unicast();
+    }
+
     async fn connect(
         &mut self,
         peer_version: u8,
@@ -143,7 +151,7 @@ impl Feeder {
             if let capability::OptionalParameterValue::Capabilities(caps) = op {
                 self.peer_caps = caps;
             }
-            // TODO: parse peer capabilities
+            self.parse_peer_capabilities();
         }
         self.tx.feed(open).await?;
         self.tx.flush().await?;

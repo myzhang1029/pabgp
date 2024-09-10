@@ -51,8 +51,16 @@ fn updater(
     update_interval: std::time::Duration,
 ) {
     loop {
-        let diff = init_db.update_with_diff().expect("TODO: handle error");
-        send_updates.send(diff).expect("TODO: handle error");
+        let diff = init_db.update_with_diff().unwrap_or_else(|e| {
+            log::error!("Database update failed: {:?}", e);
+            DatabaseDiff::default()
+        });
+        if send_updates.send(diff).is_err() {
+            log::error!("Failed to send update to session");
+            // `tokio` says the only way to fail is if all receivers are dropped,
+            // which implies that the main loop has exited. We should exit too.
+            break;
+        }
         std::thread::sleep(update_interval);
     }
 }
