@@ -390,5 +390,6 @@ mod tests {
         assert!(db.ipv4_prefixes[&country].contains(&should_be_in));
         assert!(!db.ipv6_prefixes.is_empty());
         let should_be_in = Cidr6::new("2604:cfc0::".parse().unwrap(), 32);
+        assert!(db.ipv6_prefixes[&country].contains(&should_be_in));
     }
 }

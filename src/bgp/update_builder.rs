@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use super::capability::Afi;
+use super::capability::{Afi, Safi};
 use super::cidr::Cidr;
 use super::endec::Component;
 use super::path::{self, AsPath, AsSegment, AsSegmentType, MpNextHop, Origin, PathAttributes};
@@ -140,7 +140,7 @@ impl UpdateBuilder {
     fn make_mp_unreach_nlri(routes: Routes, afi: Afi) -> path::Value {
         let mp_unreach_nlri = path::MpUnreachNlri {
             afi,
-            safi: super::Safi::Unicast,
+            safi: Safi::Unicast,
             withdrawn_routes: routes,
         };
         path::Value {
@@ -153,7 +153,7 @@ impl UpdateBuilder {
     fn make_mp_reach_nlri(routes: Routes, afi: Afi, next_hop: MpNextHop) -> path::Value {
         let mp_reach_nlri = path::MpReachNlri {
             afi,
-            safi: super::Safi::Unicast,
+            safi: Safi::Unicast,
             next_hop,
             nlri: routes,
         };

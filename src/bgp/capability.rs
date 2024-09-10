@@ -6,12 +6,22 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::{check_remaining_len, endec::Component};
+use crate::endec::Component;
 use bytes::{Buf, BufMut, Bytes};
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
 use std::ops::Deref;
 
+/// Check if the remaining buffer length is enough for the expected length
+macro_rules! check_remaining_len {
+    ($src:expr, $len:expr, $name:expr) => {
+        let cmp = $src.remaining().cmp(&$len);
+        match $src.remaining().cmp(&$len) {
+            std::cmp::Ordering::Equal => {}
+            _ => return Err($crate::Error::InternalLength($name, cmp)),
+        }
+    };
+}
 /// A list of BGP optional parameters
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct OptionalParameters(pub Vec<OptionalParameterValue>);
@@ -205,6 +215,71 @@ impl Deref for Capabilities {
     }
 }
 
+impl Capabilities {
+    /// Check if a specific capability is present
+    pub fn has(&self, cap: &Value) -> bool {
+        self.0.iter().any(|v| *v == *cap)
+    }
+
+    /// Check if ipv4 unicast multi-protocol capability is present
+    #[must_use]
+    pub fn has_mp_ipv4_unicast(&self) -> bool {
+        self.has(&Value::MultiProtocol(MultiProtocol {
+            afi: Afi::Ipv4,
+            safi: Safi::Unicast,
+        }))
+    }
+
+    /// Check if ipv6 unicast multi-protocol capability is present
+    #[must_use]
+    pub fn has_mp_ipv6_unicast(&self) -> bool {
+        self.has(&Value::MultiProtocol(MultiProtocol {
+            afi: Afi::Ipv6,
+            safi: Safi::Unicast,
+        }))
+    }
+
+    /// Check if route refresh capability is present
+    #[must_use]
+    pub fn has_route_refresh(&self) -> bool {
+        self.has(&Value::RouteRefresh)
+    }
+
+    /// Check if an extended next hop capability is present
+    #[must_use]
+    pub fn has_extended_next_hop(&self, afi: Afi, safi: Safi, next_hop_afi: Afi) -> bool {
+        let looking_for = ExtendedNextHopValue {
+            afi,
+            safi,
+            next_hop_afi,
+        };
+        self.0.iter().any(|v| {
+            // Find the extended next hop capability
+            if let Value::ExtendedNextHop(enh) = v {
+                enh.0.iter().any(|v| *v == looking_for)
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Get the value of an unsupported capability
+    #[must_use]
+    pub fn get_unsupported(&self, code: u8) -> Option<&Bytes> {
+        self.0.iter().find_map(|v| {
+            if let Value::Unsupported(c, data) = v {
+                if *c == code {
+                    Some(data)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+    }
+}
+
 /// BGP capability (RFC 3392/5492)
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
@@ -280,7 +355,8 @@ impl Component for MultiProtocol {
 
 /// BGP address family identifier
 ///
-/// https://www.iana.org/assignments/address-family-numbers/address-family-numbers.xhtml
+/// # References
+/// [Address Family Numbers](https://www.iana.org/assignments/address-family-numbers/address-family-numbers.xhtml)
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Primitive)]
 #[non_exhaustive]
 #[repr(u16)]

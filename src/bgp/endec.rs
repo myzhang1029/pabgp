@@ -13,18 +13,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 #[cfg(feature = "tokio-endec")]
 use tokio_util::codec::{Decoder, Encoder};
 
-/// Check if the remaining buffer length is enough for the expected length
-#[macro_export]
-macro_rules! check_remaining_len {
-    ($src:expr, $len:expr, $name:expr) => {
-        let cmp = $src.remaining().cmp(&$len);
-        match $src.remaining().cmp(&$len) {
-            std::cmp::Ordering::Equal => {}
-            _ => return Err($crate::Error::InternalLength($name, cmp)),
-        }
-    };
-}
-
 /// BGP packet encoder
 #[derive(Copy, Clone, Debug)]
 #[cfg(feature = "tokio-endec")]

@@ -14,7 +14,6 @@ pub mod path;
 pub mod route;
 mod update_builder;
 
-pub use capability::Safi;
 #[cfg(feature = "tokio-endec")]
 pub use endec::BgpCodec as Codec;
 pub use update_builder::UpdateBuilder;
