@@ -84,13 +84,6 @@ impl CountrySpec {
     pub fn rir(&self) -> RirName {
         self.rir
     }
-
-    // Mainly for maps which require a reference
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    /// Get the ISO 3166-1 alpha-2 country code
-    pub fn country_code(&self) -> [u8; 2] {
-        self.country_code
-    }
 }
 
 impl Display for CountrySpec {

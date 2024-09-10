@@ -7,14 +7,16 @@
 pub mod capability;
 pub mod cidr;
 mod endec;
+#[cfg(test)]
+#[cfg(feature = "tokio-endec")]
+mod endec_tests;
 pub mod path;
 pub mod route;
-#[cfg(test)]
-mod tests;
 mod update_builder;
 
 pub use capability::Safi;
-pub use endec::{BgpCodec as Codec, Error};
+#[cfg(feature = "tokio-endec")]
+pub use endec::BgpCodec as Codec;
 pub use update_builder::UpdateBuilder;
 
 use bytes::{Buf, BufMut};
@@ -31,6 +33,30 @@ pub const BGP_VERSION: u8 = 4;
 
 /// ASN for AS4
 pub const AS_TRANS: u16 = 23456;
+
+/// BGP marker
+pub const MARKER: [u8; 16] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+];
+
+/// BGP packet errors
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("invalid or missing marker")]
+    Marker,
+    #[error("invalid message type")]
+    MessageType(u8),
+    #[error("invalid internal length at {0} ({1:?})")]
+    InternalLength(&'static str, std::cmp::Ordering),
+    #[error("invalid {0} type of {1}")]
+    InternalType(&'static str, u16),
+    #[error("requires MP-BGP capability")]
+    NoMpBgp,
+    #[error("attempting to update NLRI without next hop")]
+    NoNextHop,
+}
 
 /// BGP message
 #[derive(Clone, Debug, PartialEq)]
@@ -52,7 +78,7 @@ pub struct Open {
 }
 
 impl Component for Open {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         let version = src.get_u8();
         let asn = src.get_u16();
         let hold_time = src.get_u16();
@@ -114,7 +140,7 @@ pub struct Update {
 }
 
 impl Component for Update {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         let withdrawn_len = src.get_u16() as usize;
         let mut wdr_buf = src.split_to(withdrawn_len);
         let withdrawn_routes = Routes::from_bytes(&mut wdr_buf)?;
@@ -170,13 +196,13 @@ pub struct Notification {
 }
 
 impl Component for Notification {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         let error_code = src.get_u8();
         let error_subcode = src.get_u8();
         let data = src.copy_to_bytes(src.remaining());
         Ok(Self {
             error_code: NotificationErrorCode::from_u8(error_code)
-                .ok_or_else(|| endec::Error::InternalType("error_code", u16::from(error_code)))?,
+                .ok_or_else(|| crate::Error::InternalType("error_code", u16::from(error_code)))?,
             error_subcode,
             data,
         })
@@ -266,4 +292,40 @@ pub enum CeaseSubcode {
     OtherConfigurationChange = 6,
     ConnectionCollisionResolution = 7,
     OutOfResources = 8,
+}
+
+#[cfg(test)]
+const fn convert_one_hex_digit(c: u8) -> u8 {
+    if c.is_ascii_digit() {
+        c - b'0'
+    } else if c.is_ascii_lowercase() {
+        c - b'a' + 10
+    } else if c.is_ascii_uppercase() {
+        c - b'A' + 10
+    } else {
+        panic!("invalid hex character");
+    }
+}
+
+#[cfg(test)]
+#[must_use]
+pub fn hex_to_bytes(hex: &str) -> bytes::Bytes {
+    // Skip these characters on octet boundary
+    const SKIP: &[u8] = b" \t\n\r:.";
+    let hex = hex.as_bytes();
+    let mut octets = bytes::BytesMut::with_capacity(hex.len() / 2);
+    let mut i = 0;
+    while i < hex.len() {
+        let c = hex[i];
+        if SKIP.contains(&c) {
+            i += 1;
+            continue;
+        }
+        let hi = convert_one_hex_digit(c) << 4;
+        assert!(i + 1 < hex.len(), "odd number of hex digits");
+        let lo = convert_one_hex_digit(hex[i + 1]);
+        octets.put_u8(hi | lo);
+        i += 2;
+    }
+    octets.freeze()
 }

@@ -21,7 +21,7 @@ use std::{
 pub struct PathAttributes(pub Vec<Value>);
 
 impl Component for PathAttributes {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let mut attributes = Vec::new();
         while src.has_remaining() {
             attributes.push(Value::from_bytes(src)?);
@@ -58,7 +58,7 @@ pub struct Value {
 }
 
 impl Component for Value {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let flags = Flags(src.get_u8());
         let type_ = src.get_u8();
         let len = if flags.is_extended_length() {
@@ -250,14 +250,11 @@ pub enum Origin {
 }
 
 impl Component for Origin {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let value = src.get_u8();
         match Self::from_u8(value) {
             Some(origin) => Ok(origin),
-            None => Err(super::endec::Error::InternalType(
-                "origin",
-                u16::from(value),
-            )),
+            None => Err(crate::Error::InternalType("origin", u16::from(value))),
         }
     }
 
@@ -276,7 +273,7 @@ impl Component for Origin {
 pub struct AsPath(pub Vec<AsSegment>);
 
 impl Component for AsPath {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let mut segments = Vec::new();
         while src.has_remaining() {
             segments.push(AsSegment::from_bytes(src)?);
@@ -326,7 +323,7 @@ pub enum AsSegmentType {
 }
 
 impl Component for AsSegment {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let type_ = src.get_u8();
         let len = src.get_u8() as usize;
         let remaining_len = src.remaining();
@@ -344,13 +341,13 @@ impl Component for AsSegment {
             }
             true
         } else {
-            return Err(super::endec::Error::InternalLength(
+            return Err(crate::Error::InternalLength(
                 "AS segment",
                 std::cmp::Ordering::Equal,
             ));
         };
         Ok(Self {
-            type_: AsSegmentType::from_u8(type_).ok_or(super::endec::Error::InternalType(
+            type_: AsSegmentType::from_u8(type_).ok_or(crate::Error::InternalType(
                 "AS segment type",
                 u16::from(type_),
             ))?,
@@ -387,7 +384,7 @@ pub struct Aggregator {
 }
 
 impl Component for Aggregator {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let asn = src.get_u16();
         let ip = Ipv4Addr::from_bytes(src)?;
         Ok(Self { asn, ip })
@@ -413,14 +410,13 @@ pub struct MpReachNlri {
 }
 
 impl Component for MpReachNlri {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let afi = src.get_u16();
-        let afi = Afi::try_from(afi)
-            .map_err(|_| super::endec::Error::InternalType("MP_REACH_NLRI AFI", afi))?;
+        let afi =
+            Afi::try_from(afi).map_err(|_| crate::Error::InternalType("MP_REACH_NLRI AFI", afi))?;
         let safi = src.get_u8();
-        let safi = Safi::try_from(safi).map_err(|_| {
-            super::endec::Error::InternalType("MP_REACH_NLRI SAFI", u16::from(safi))
-        })?;
+        let safi = Safi::try_from(safi)
+            .map_err(|_| crate::Error::InternalType("MP_REACH_NLRI SAFI", u16::from(safi)))?;
         let nh_len = src.get_u8() as usize;
         let mut nh_src = src.split_to(nh_len);
         let next_hop = MpNextHop::from_bytes(&mut nh_src)?;
@@ -465,7 +461,7 @@ pub enum MpNextHop {
 }
 
 impl Component for MpNextHop {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         match src.remaining() {
             4 | 16 => Ok(MpNextHop::Single(IpAddr::from_bytes(src)?)),
             32 => {
@@ -473,7 +469,7 @@ impl Component for MpNextHop {
                 let v6ll = Ipv6Addr::from_bytes(src)?;
                 Ok(MpNextHop::V6AndLL(v6local, v6ll))
             }
-            _ => Err(super::endec::Error::InternalLength(
+            _ => Err(crate::Error::InternalLength(
                 "MP_NEXT_HOP",
                 std::cmp::Ordering::Equal,
             )),
@@ -517,14 +513,13 @@ pub struct MpUnreachNlri {
 }
 
 impl Component for MpUnreachNlri {
-    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let afi = src.get_u16();
         let afi = Afi::try_from(afi)
-            .map_err(|_| super::endec::Error::InternalType("MP_UNREACH_NLRI AFI", afi))?;
+            .map_err(|_| crate::Error::InternalType("MP_UNREACH_NLRI AFI", afi))?;
         let safi = src.get_u8();
-        let safi = Safi::try_from(safi).map_err(|_| {
-            super::endec::Error::InternalType("MP_UNREACH_NLRI SAFI", u16::from(safi))
-        })?;
+        let safi = Safi::try_from(safi)
+            .map_err(|_| crate::Error::InternalType("MP_UNREACH_NLRI SAFI", u16::from(safi)))?;
         let withdrawn_routes = Routes::from_bytes(src)?;
         Ok(Self {
             afi,
@@ -551,7 +546,7 @@ impl Component for MpUnreachNlri {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::hex_to_bytes;
+    use crate::hex_to_bytes;
 
     #[test]
     fn test_origin() {

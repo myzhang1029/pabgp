@@ -4,7 +4,7 @@
 
 use super::capability::Afi;
 use super::cidr::Cidr;
-use super::endec::{Component, Error};
+use super::endec::Component;
 use super::path::{self, AsPath, AsSegment, AsSegmentType, MpNextHop, Origin, PathAttributes};
 use super::route::Routes;
 use std::net::IpAddr;
@@ -116,7 +116,7 @@ impl UpdateBuilder {
     ///
     /// After this method is called, if no next hop is set, it means that
     /// NLRI components are empty and no next hop is needed.
-    fn check_next_hop(&mut self) -> Result<(), Error> {
+    fn check_next_hop(&mut self) -> Result<(), crate::Error> {
         if let Some(next_hop) = &self.next_hop {
             if self.enable_mp_bgp {
                 Ok(())
@@ -127,10 +127,10 @@ impl UpdateBuilder {
                 });
                 Ok(())
             } else {
-                Err(Error::NoMpBgp)
+                Err(crate::Error::NoMpBgp)
             }
         } else if !self.nlri_ipv6_routes.is_empty() || !self.withdrawn_ipv6_routes.is_empty() {
-            Err(Error::NoNextHop)
+            Err(crate::Error::NoNextHop)
         } else {
             Ok(())
         }
@@ -215,7 +215,12 @@ impl UpdateBuilder {
     }
 
     /// Build one or more UPDATE messages depending on the size of routes.
-    pub fn build(mut self) -> Result<Vec<super::Update>, Error> {
+    ///
+    /// # Errors
+    ///
+    /// - [`crate::Error::NoNextHop`] if no next hop is set and there are NLRI components
+    /// - [`crate::Error::NoMpBgp`] if MP-BGP is enabled but IPv6 is used
+    pub fn build(mut self) -> Result<Vec<super::Update>, crate::Error> {
         // The algorithm is quite simple and not very efficient.
         self.check_next_hop()?;
         let Self {

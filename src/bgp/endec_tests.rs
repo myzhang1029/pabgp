@@ -6,43 +6,9 @@ use super::endec::*;
 use super::path::*;
 use super::route::*;
 use super::*;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 use std::net::Ipv6Addr;
-use tokio_util::codec::Decoder;
-use tokio_util::codec::Encoder;
-
-fn convert_one_hex_digit(c: u8) -> u8 {
-    if c.is_ascii_digit() {
-        c - b'0'
-    } else if (b'a'..=b'f').contains(&c) {
-        c - b'a' + 10
-    } else if (b'A'..=b'F').contains(&c) {
-        c - b'A' + 10
-    } else {
-        panic!("invalid hex character: {}", c as char);
-    }
-}
-
-pub fn hex_to_bytes(hex: &str) -> Bytes {
-    // Skip these characters on octet boundary
-    const SKIP: &[u8] = b" \t\n\r:.";
-    let hex = hex.as_bytes();
-    let mut octets = BytesMut::with_capacity(hex.len() / 2);
-    let mut i = 0;
-    while i < hex.len() {
-        let c = hex[i];
-        if SKIP.contains(&c) {
-            i += 1;
-            continue;
-        }
-        let hi = convert_one_hex_digit(c) << 4;
-        assert!(i + 1 < hex.len(), "odd number of hex digits");
-        let lo = convert_one_hex_digit(hex[i + 1]);
-        octets.put_u8(hi | lo);
-        i += 2;
-    }
-    octets.freeze()
-}
+use tokio_util::codec::{Decoder, Encoder};
 
 #[test]
 fn test_sanity_hex_to_bytes() {
@@ -96,9 +62,8 @@ fn test_open_message_wsh_2() {
     let mut bmut = data.clone().into();
     let mut codec = BgpCodec;
     let msg = codec.decode(&mut bmut).unwrap().unwrap();
-    let msg = match msg {
-        Message::Open(msg) => msg,
-        _ => panic!("unexpected message type"),
+    let Message::Open(msg) = msg else {
+        panic!("unexpected message type");
     };
     assert_eq!(msg.version, 4);
     assert_eq!(msg.asn, AS_TRANS);
@@ -169,9 +134,8 @@ fn test_update_message_wsh_1() {
     let mut bmut = data.clone().into();
     let mut codec = BgpCodec;
     let msg = codec.decode(&mut bmut).unwrap().unwrap();
-    let msg = match msg {
-        Message::Update(msg) => msg,
-        _ => panic!("unexpected message type"),
+    let Message::Update(msg) = msg else {
+        panic!("unexpected message type");
     };
     assert_eq!(msg.withdrawn_routes.len(), 0);
     assert_eq!(msg.path_attributes.len(), 4);

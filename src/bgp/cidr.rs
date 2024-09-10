@@ -4,12 +4,12 @@
 
 #![allow(clippy::module_name_repetitions)]
 
-use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 /// A IPv4 CIDR block
-#[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "impl-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cidr4 {
     pub addr: Ipv4Addr,
     pub prefix_len: u8,
@@ -41,7 +41,8 @@ impl Cidr4 {
 }
 
 /// A IPv6 CIDR block
-#[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "impl-serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Cidr6 {
     pub addr: Ipv6Addr,
     pub prefix_len: u8,
@@ -61,7 +62,8 @@ impl Cidr6 {
 }
 
 /// A CIDR block
-#[derive(Copy, Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "impl-serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Cidr {
     V4(Cidr4),
     V6(Cidr6),

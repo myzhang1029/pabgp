@@ -2,14 +2,15 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use super::Error;
+#[cfg(feature = "tokio-endec")]
 use super::{Message, Notification, Open, Update};
 use bytes::{Buf, BufMut};
 use enum_primitive_derive::Primitive;
+#[cfg(feature = "tokio-endec")]
 use num_traits::FromPrimitive;
-use std::{
-    cmp::Ordering,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+#[cfg(feature = "tokio-endec")]
 use tokio_util::codec::{Decoder, Encoder};
 
 /// Check if the remaining buffer length is enough for the expected length
@@ -19,45 +20,23 @@ macro_rules! check_remaining_len {
         let cmp = $src.remaining().cmp(&$len);
         match $src.remaining().cmp(&$len) {
             std::cmp::Ordering::Equal => {}
-            _ => return Err(endec::Error::InternalLength($name, cmp)),
+            _ => return Err($crate::Error::InternalLength($name, cmp)),
         }
     };
 }
 
-/// BGP marker
-pub const MARKER: [u8; 16] = [
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-];
-
 /// BGP packet encoder
 #[derive(Copy, Clone, Debug)]
+#[cfg(feature = "tokio-endec")]
 pub struct BgpCodec;
 
-/// BGP packet errors
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error("invalid or missing marker")]
-    Marker,
-    #[error("invalid message type")]
-    MessageType(u8),
-    #[error("invalid internal length at {0} ({1:?})")]
-    InternalLength(&'static str, Ordering),
-    #[error("invalid {0} type of {1}")]
-    InternalType(&'static str, u16),
-    #[error("requires MP-BGP capability")]
-    NoMpBgp,
-    #[error("attempting to update NLRI without next hop")]
-    NoNextHop,
-}
-
+#[cfg(feature = "tokio-endec")]
 impl Decoder for BgpCodec {
     type Item = Message;
     type Error = Error;
 
     fn decode(&mut self, src: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if src.len() < MARKER.len() + 2 {
+        if src.len() < crate::MARKER.len() + 2 {
             // Marker + length
             return Ok(None);
         }
@@ -68,7 +47,7 @@ impl Decoder for BgpCodec {
         // Now the packet is supposed to be complete and let's use the Buf methods
         // to avoid manual indexing.
         let marker = src.copy_to_bytes(16);
-        if *marker != MARKER {
+        if *marker != crate::MARKER {
             return Err(Error::Marker);
         }
         log::trace!("Valid BGP marker, length: {length}");
@@ -84,19 +63,23 @@ impl Decoder for BgpCodec {
         };
         if buf.has_remaining() {
             log::debug!("Remaining bytes after decoding: {buf:?}");
-            Err(Error::InternalLength("message", Ordering::Greater))
+            Err(Error::InternalLength(
+                "message",
+                std::cmp::Ordering::Greater,
+            ))
         } else {
             Ok(Some(packet))
         }
     }
 }
 
+#[cfg(feature = "tokio-endec")]
 impl Encoder<Message> for BgpCodec {
     // tokio requires the Error type to be `From<io::Error>`, but actually ours is `!`
     type Error = std::io::Error;
 
     fn encode(&mut self, item: Message, dst: &mut bytes::BytesMut) -> Result<(), Self::Error> {
-        dst.put_slice(&MARKER);
+        dst.put_slice(&crate::MARKER);
         let len_pos = dst.len();
         dst.put_u16(0); // Placeholder for length
         let len = match item {

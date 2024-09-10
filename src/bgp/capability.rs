@@ -6,10 +6,7 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use crate::{
-    check_remaining_len,
-    endec::{self, Component},
-};
+use crate::{check_remaining_len, endec::Component};
 use bytes::{Buf, BufMut, Bytes};
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
@@ -20,7 +17,7 @@ use std::ops::Deref;
 pub struct OptionalParameters(pub Vec<OptionalParameterValue>);
 
 impl Component for OptionalParameters {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         // RFC 4271 4.2 Optional Parameters Length
         let len = src.get_u8() as usize;
         check_remaining_len!(src, len, "optional parameter length");
@@ -79,7 +76,7 @@ pub enum OptionalParameterType {
 }
 
 impl Component for OptionalParameterValue {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         // RFC 5492 4. Optional Parameters -> Parameter Type
         let param_type = src.get_u8();
         // RFC 5492 4. Optional Parameters -> Parameter Length
@@ -90,7 +87,7 @@ impl Component for OptionalParameterValue {
                 let cap = Capabilities::from_bytes(src)?;
                 Ok(Self::Capabilities(cap))
             }
-            _ => Err(endec::Error::InternalType(
+            _ => Err(crate::Error::InternalType(
                 "optional parameter",
                 u16::from(param_type),
             )),
@@ -125,7 +122,7 @@ impl Component for OptionalParameterValue {
 pub struct Capabilities(Vec<Value>);
 
 impl Component for Capabilities {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         let mut cap = Vec::new();
         while src.has_remaining() {
             // RFC 5492 4. Optional Parameters -> Capability Code
@@ -258,14 +255,14 @@ pub struct MultiProtocol {
 }
 
 impl Component for MultiProtocol {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         let afi = src.get_u16();
         let afi =
-            Afi::try_from(afi).map_err(|_| endec::Error::InternalType("MultiProtocol AFI", afi))?;
+            Afi::try_from(afi).map_err(|_| crate::Error::InternalType("MultiProtocol AFI", afi))?;
         let _ = src.get_u8(); // Reserved
         let safi = src.get_u8().into();
         let safi = Safi::try_from(safi)
-            .map_err(|_| endec::Error::InternalType("MultiProtocol SAFI", safi))?;
+            .map_err(|_| crate::Error::InternalType("MultiProtocol SAFI", safi))?;
         Ok(Self { afi, safi })
     }
 
@@ -331,18 +328,18 @@ pub struct ExtendedNextHopValue {
 }
 
 impl Component for ExtendedNextHop {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         let mut values = Vec::with_capacity(src.len() / 6);
         while src.has_remaining() {
             let afi = src.get_u16();
             let afi = Afi::try_from(afi)
-                .map_err(|_| endec::Error::InternalType("ExtendedNextHop AFI", afi))?;
+                .map_err(|_| crate::Error::InternalType("ExtendedNextHop AFI", afi))?;
             let safi = src.get_u16();
             let safi = Safi::try_from(safi)
-                .map_err(|_| endec::Error::InternalType("ExtendedNextHop SAFI", safi))?;
+                .map_err(|_| crate::Error::InternalType("ExtendedNextHop SAFI", safi))?;
             let next_hop_afi = src.get_u16();
             let next_hop_afi = Afi::try_from(next_hop_afi).map_err(|_| {
-                endec::Error::InternalType("ExtendedNextHop NextHop AFI", next_hop_afi)
+                crate::Error::InternalType("ExtendedNextHop NextHop AFI", next_hop_afi)
             })?;
             values.push(ExtendedNextHopValue {
                 afi,

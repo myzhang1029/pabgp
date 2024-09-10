@@ -39,7 +39,7 @@ pub struct Value {
 pub struct Routes(pub Vec<Value>);
 
 impl Component for Routes {
-    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, super::endec::Error> {
+    fn from_bytes(src: &mut bytes::Bytes) -> Result<Self, crate::Error> {
         let mut routes = Vec::new();
         while src.has_remaining() {
             let prefix_len = src.get_u8();
@@ -182,7 +182,7 @@ impl From<Cidr> for Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::hex_to_bytes;
+    use crate::hex_to_bytes;
     use bytes::BytesMut;
 
     #[test]
