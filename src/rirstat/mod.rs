@@ -5,7 +5,7 @@
 
 pub mod rirbase;
 
-use crate::cidr::{Cidr, Cidr4, Cidr6};
+use crate::bgp::cidr::{Cidr, Cidr4, Cidr6};
 use lazy_static::lazy_static;
 use rirbase::{CountrySpec, RirName};
 use serde::{Deserialize, Serialize};
@@ -195,16 +195,6 @@ impl Database {
         Ok(diff)
     }
 
-    /// Get the IPv4 CIDR blocks for a country
-    pub fn get_cidr4(&self, country: CountrySpec) -> Option<&Vec<Cidr4>> {
-        self.ipv4_prefixes.get(&country)
-    }
-
-    /// Get the CIDR blocks for a country
-    pub fn get_cidr6(&self, country: CountrySpec) -> Option<&Vec<Cidr6>> {
-        self.ipv6_prefixes.get(&country)
-    }
-
     /// Parse the response from a ureq request
     fn update_from_response(
         &mut self,
@@ -326,6 +316,16 @@ impl Database {
             }
         }
     }
+
+    /// Consumes the database and returns the country to CIDR maps
+    pub fn into_prefixes(
+        self,
+    ) -> (
+        HashMap<CountrySpec, Vec<Cidr4>>,
+        HashMap<CountrySpec, Vec<Cidr6>>,
+    ) {
+        (self.ipv4_prefixes, self.ipv6_prefixes)
+    }
 }
 
 #[cfg(test)]
@@ -367,12 +367,28 @@ mod tests {
 
     #[test]
     #[cfg(feature = "test-real-internet")]
-    fn test_update_all_cnv4() {
-        let country = "apnic:CN".parse().unwrap();
-        let mut db = Database::new(vec![country]);
+    fn test_update_all_jp() {
+        let country = "apnic:JP".parse().unwrap();
+        let mut db = Database::new(vec![country], true, true);
         db.update_all().unwrap();
         assert!(!db.ipv4_prefixes.is_empty());
-        let should_be_in = Cidr4::new("1.2.4.0".parse().unwrap(), 24);
+        let should_be_in = Cidr4::new("43.252.240.0".parse().unwrap(), 22);
         assert!(db.ipv4_prefixes[&country].contains(&should_be_in));
+        assert!(!db.ipv6_prefixes.is_empty());
+        let should_be_in = Cidr6::new("2001:44a8::".parse().unwrap(), 32);
+        assert!(db.ipv6_prefixes[&country].contains(&should_be_in));
+    }
+
+    #[test]
+    #[cfg(feature = "test-real-internet")]
+    fn test_update_all_ca() {
+        let country = "arin:CA".parse().unwrap();
+        let mut db = Database::new(vec![country], true, true);
+        db.update_all().unwrap();
+        assert!(!db.ipv4_prefixes.is_empty());
+        let should_be_in = Cidr4::new("192.174.4.0".parse().unwrap(), 22);
+        assert!(db.ipv4_prefixes[&country].contains(&should_be_in));
+        assert!(!db.ipv6_prefixes.is_empty());
+        let should_be_in = Cidr6::new("2604:cfc0::".parse().unwrap(), 32);
     }
 }

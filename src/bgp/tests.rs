@@ -1,14 +1,13 @@
 //! BGP packet parsing tests
 
-use crate::cidr::Cidr4;
-
 use super::capability::*;
+use super::cidr::Cidr4;
 use super::endec::*;
 use super::path::*;
 use super::route::*;
 use super::*;
 use bytes::{BufMut, Bytes, BytesMut};
-use std::net::{IpAddr, Ipv6Addr};
+use std::net::Ipv6Addr;
 use tokio_util::codec::Decoder;
 use tokio_util::codec::Encoder;
 
@@ -201,7 +200,7 @@ fn test_update_message_wsh_1() {
         *msg.path_attributes.get(2).unwrap(),
         path::Value {
             flags: path::Flags(0x40),
-            data: path::Data::NextHop(IpAddr::V4(Ipv4Addr::new(172, 23, 6, 165))),
+            data: path::Data::NextHop(Ipv4Addr::new(172, 23, 6, 165)),
         }
     );
     assert_eq!(
@@ -244,7 +243,6 @@ fn test_update_message_wsh_2() {
         fcde3880 00000064 00000035
         fcde3880 00000065 0000040c",
     );
-    println!("data len {}", data.len());
     let mut bmut = data.clone().into();
     let mut codec = BgpCodec;
     let msg = codec.decode(&mut bmut).unwrap().unwrap();

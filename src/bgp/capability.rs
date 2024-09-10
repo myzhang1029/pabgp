@@ -43,6 +43,10 @@ impl Component for OptionalParameters {
         dst[length_pos] = u8::try_from(len).expect("Optional parameters length overflow");
         len + 1 // Length
     }
+
+    fn encoded_len(&self) -> usize {
+        self.0.iter().map(Component::encoded_len).sum::<usize>() + 1 // Length
+    }
 }
 
 impl From<Vec<OptionalParameterValue>> for OptionalParameters {
@@ -107,6 +111,12 @@ impl Component for OptionalParameterValue {
             }
         }
     }
+
+    fn encoded_len(&self) -> usize {
+        match self {
+            OptionalParameterValue::Capabilities(cap) => cap.encoded_len() + 2, // Type and length
+        }
+    }
 }
 
 /// BGP capability
@@ -165,6 +175,22 @@ impl Component for Capabilities {
             len += value_len + 2; // Code and length
         }
         len
+    }
+
+    fn encoded_len(&self) -> usize {
+        self.0
+            .iter()
+            .map(|v| {
+                let len = match v {
+                    Value::MultiProtocol(mp) => mp.encoded_len(),
+                    Value::RouteRefresh | Value::ExtendedMessage => 0,
+                    Value::ExtendedNextHop(enh) => enh.encoded_len(),
+                    Value::FourOctetAsNumber(_) => 4,
+                    Value::Unsupported(_, data) => data.len(),
+                };
+                len + 2 // Code and length
+            })
+            .sum()
     }
 }
 
@@ -247,6 +273,10 @@ impl Component for MultiProtocol {
         dst.put_u16(self.afi as u16);
         dst.put_u8(0); // Reserved
         dst.put_u8(self.safi as u8);
+        self.encoded_len()
+    }
+
+    fn encoded_len(&self) -> usize {
         4
     }
 }
@@ -324,14 +354,17 @@ impl Component for ExtendedNextHop {
     }
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
-        let mut len = 0;
+        let len = self.encoded_len();
         for value in self.0 {
             dst.put_u16(value.afi as u16);
             dst.put_u16(value.safi as u16);
             dst.put_u16(value.next_hop_afi as u16);
-            len += 6;
         }
         len
+    }
+
+    fn encoded_len(&self) -> usize {
+        self.0.len() * 6
     }
 }
 
@@ -403,6 +436,16 @@ impl CapabilitiesBuilder {
             afi: Afi::Ipv4,
             safi: Safi::Unicast,
             next_hop_afi: Afi::Ipv6,
+        });
+        self
+    }
+
+    /// Shortcut for adding a IPv6-over-IPv4 extended next hop capability
+    pub fn enh_ipv6_over_ipv4(mut self) -> Self {
+        self.extended_next_hops.push(ExtendedNextHopValue {
+            afi: Afi::Ipv6,
+            safi: Safi::Unicast,
+            next_hop_afi: Afi::Ipv4,
         });
         self
     }

@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::bgp::capability::{self, Capabilities, CapabilitiesBuilder};
+use crate::bgp::path::{AsSegmentType, Origin};
+use crate::bgp::route::Routes;
 use crate::bgp::{
     Codec, Error as PacketError, Message, Notification, NotificationErrorCode, Open,
-    OpenMessageErrorSubcode, BGP_VERSION,
+    OpenMessageErrorSubcode, UpdateBuilder, BGP_VERSION,
 };
-use crate::rirstat::{Database, DatabaseDiff};
+use crate::rirstat::DatabaseDiff;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::{tcp, TcpStream};
@@ -28,8 +30,10 @@ pub enum Error {
     PeerNotification(crate::bgp::Notification),
 }
 
+/// A simple passive BGP speaker
 pub struct Feeder {
-    init_db: Option<Database>,
+    init_ipv4_routes: Option<Routes>,
+    init_ipv6_routes: Option<Routes>,
     recv_updates: broadcast::Receiver<DatabaseDiff>,
     local_as: u32,
     local_id: std::net::Ipv4Addr,
@@ -38,11 +42,14 @@ pub struct Feeder {
     tx: FramedWrite<tcp::OwnedWriteHalf, Codec>,
     peer_hold_time: Option<u16>,
     peer_caps: Capabilities,
+    // Default to true unless the peer does not support it
+    enable_mp_bgp: bool,
 }
 
 impl Feeder {
     pub fn new(
-        init_db: Database,
+        init_ipv4_routes: Option<Routes>,
+        init_ipv6_routes: Option<Routes>,
         recv_updates: broadcast::Receiver<DatabaseDiff>,
         socket: TcpStream,
         local_as: u32,
@@ -54,7 +61,8 @@ impl Feeder {
         let rx = FramedRead::new(rx, codec);
         let tx = FramedWrite::new(tx, codec);
         Self {
-            init_db: Some(init_db),
+            init_ipv4_routes,
+            init_ipv6_routes,
             recv_updates,
             local_as,
             local_id,
@@ -63,6 +71,7 @@ impl Feeder {
             tx,
             peer_hold_time: None,
             peer_caps: Capabilities::default(),
+            enable_mp_bgp: true,
         }
     }
 
@@ -134,6 +143,7 @@ impl Feeder {
             if let capability::OptionalParameterValue::Capabilities(caps) = op {
                 self.peer_caps = caps;
             }
+            // TODO: parse peer capabilities
         }
         self.tx.feed(open).await?;
         self.tx.flush().await?;
@@ -192,7 +202,7 @@ impl Feeder {
                 return Err(Error::PeerNotification(notification));
             }
             Message::Update(update) => {
-                log::info!("Received UPDATE message from peer.");
+                log::debug!("Received UPDATE message from peer.");
                 log::debug!("Peer withdrew {} routes", update.withdrawn_routes.len());
                 log::debug!("Peer added {} OLD BGP routes", update.nlri.len());
                 log::debug!(
@@ -208,13 +218,54 @@ impl Feeder {
         Ok(())
     }
 
+    async fn send_initial_updates(&mut self) -> Result<(), Error> {
+        let packets = UpdateBuilder::new(self.enable_mp_bgp)
+            .set_next_hop(self.next_hop.into())
+            .set_origin(Origin::Igp)
+            .set_as_path(AsSegmentType::AsSequence, vec![self.local_as])
+            .add_ipv4_routes(
+                self.init_ipv4_routes
+                    .take()
+                    .expect("Initial IPv4 routes not set"),
+            )
+            .add_ipv6_routes(
+                self.init_ipv6_routes
+                    .take()
+                    .expect("Initial IPv6 routes not set"),
+            )
+            .build()?;
+        for packet in packets {
+            self.tx.feed(Message::Update(packet)).await?;
+        }
+        self.tx.flush().await?;
+        log::info!("Sent initial routes to peer");
+        Ok(())
+    }
+
     async fn established(&mut self) -> Result<(), Error> {
         // State = Established
+        log::info!("Peer connection established");
+        self.send_initial_updates().await?;
         loop {
             tokio::select! {
-                _ = self.recv_updates.recv() => {
+                diffres = self.recv_updates.recv() => {
                     // Send UPDATE
-                    // TODO: implement
+                    log::info!("Received database update");
+                    let diff = diffres.expect("Database updater task exited");
+                    let packets = UpdateBuilder::new(self.enable_mp_bgp)
+                        .set_next_hop(self.next_hop.into())
+                        .set_origin(Origin::Igp)
+                        .set_as_path(AsSegmentType::AsSequence, vec![self.local_as])
+                        .add_ipv4_routes(diff.new_ipv4.values().flatten().into())
+                        .add_ipv6_routes(diff.new_ipv6.values().flatten().into())
+                        .withdraw_ipv4_routes(diff.withdrawn_ipv4.values().flatten().into())
+                        .withdraw_ipv6_routes(diff.withdrawn_ipv6.values().flatten().into())
+                        .build()?;
+                    for packet in packets {
+                        self.tx.feed(Message::Update(packet)).await?;
+                    }
+                    self.tx.flush().await?;
+                    log::info!("Sent database update to peer");
                 }
                 packet = self.rx.next() => {
                     let packet = packet.ok_or(Error::Io(std::io::Error::new(

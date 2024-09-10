@@ -4,22 +4,25 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-pub mod builder;
 pub mod capability;
+pub mod cidr;
 mod endec;
 pub mod path;
 pub mod route;
 #[cfg(test)]
 mod tests;
+mod update_builder;
 
+pub use capability::Safi;
 pub use endec::{BgpCodec as Codec, Error};
-use enum_primitive_derive::Primitive;
-use num_traits::FromPrimitive;
+pub use update_builder::UpdateBuilder;
 
 use crate::check_remaining_len;
 use bytes::{Buf, BufMut};
 use capability::{Capabilities, OptionalParameters};
 use endec::Component;
+use enum_primitive_derive::Primitive;
+use num_traits::FromPrimitive;
 use path::PathAttributes;
 use route::Routes;
 use std::net::Ipv4Addr;
@@ -73,6 +76,10 @@ impl Component for Open {
         len += self.bgp_id.to_bytes(dst);
         len += self.opt_params.to_bytes(dst);
         len
+    }
+
+    fn encoded_len(&self) -> usize {
+        1 + 2 + 2 + 4 + self.opt_params.encoded_len()
     }
 }
 
@@ -149,6 +156,13 @@ impl Component for Update {
         len += self.nlri.to_bytes(dst);
         len
     }
+
+    fn encoded_len(&self) -> usize {
+        2 + self.withdrawn_routes.encoded_len()
+            + 2
+            + self.path_attributes.encoded_len()
+            + self.nlri.encoded_len()
+    }
 }
 
 /// BGP notification message
@@ -173,12 +187,14 @@ impl Component for Notification {
     }
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
-        let mut len = 0;
-        len += (self.error_code as u8).to_bytes(dst);
-        len += self.error_subcode.to_bytes(dst);
-        len += self.data.len();
+        (self.error_code as u8).to_bytes(dst);
+        self.error_subcode.to_bytes(dst);
         dst.put_slice(&self.data);
-        len
+        self.encoded_len()
+    }
+
+    fn encoded_len(&self) -> usize {
+        2 + self.data.len()
     }
 }
 

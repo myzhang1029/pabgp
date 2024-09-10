@@ -46,6 +46,10 @@ pub enum Error {
     InternalLength(&'static str, Ordering),
     #[error("invalid {0} type of {1}")]
     InternalType(&'static str, u16),
+    #[error("requires MP-BGP capability")]
+    NoMpBgp,
+    #[error("attempting to update NLRI without next hop")]
+    NoNextHop,
 }
 
 impl Decoder for BgpCodec {
@@ -142,6 +146,9 @@ pub trait Component {
     ///
     /// Returns the number of bytes written.
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize;
+
+    /// Find out the length of the component, preferably without encoding it.
+    fn encoded_len(&self) -> usize;
 }
 
 impl Component for Ipv4Addr {
@@ -152,6 +159,10 @@ impl Component for Ipv4Addr {
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
         dst.put_u32(self.into());
+        4
+    }
+
+    fn encoded_len(&self) -> usize {
         4
     }
 }
@@ -165,6 +176,10 @@ impl Component for Ipv6Addr {
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
         dst.put_slice(&self.octets());
+        16
+    }
+
+    fn encoded_len(&self) -> usize {
         16
     }
 }
@@ -189,6 +204,13 @@ impl Component for IpAddr {
             Self::V6(addr) => addr.to_bytes(dst),
         }
     }
+
+    fn encoded_len(&self) -> usize {
+        match self {
+            Self::V4(addr) => addr.encoded_len(),
+            Self::V6(addr) => addr.encoded_len(),
+        }
+    }
 }
 
 macro_rules! impl_component_for_intn {
@@ -200,6 +222,10 @@ macro_rules! impl_component_for_intn {
 
             fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
                 dst.$putter(self);
+                $n
+            }
+
+            fn encoded_len(&self) -> usize {
                 $n
             }
         }

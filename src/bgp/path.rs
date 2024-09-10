@@ -36,6 +36,10 @@ impl Component for PathAttributes {
         }
         len
     }
+
+    fn encoded_len(&self) -> usize {
+        self.0.iter().map(Value::encoded_len).sum()
+    }
 }
 
 impl Deref for PathAttributes {
@@ -66,7 +70,7 @@ impl Component for Value {
         let data = match Type::from_u8(type_) {
             Some(Type::Origin) => Data::Origin(Origin::from_bytes(&mut src)?),
             Some(Type::AsPath) => Data::AsPath(AsPath::from_bytes(&mut src)?),
-            Some(Type::NextHop) => Data::NextHop(IpAddr::from_bytes(&mut src)?),
+            Some(Type::NextHop) => Data::NextHop(Ipv4Addr::from_bytes(&mut src)?),
             Some(Type::MultiExitDisc) => Data::MultiExitDisc(src.get_u32()),
             Some(Type::LocalPref) => Data::LocalPref(src.get_u32()),
             Some(Type::AtomicAggregate) => Data::AtomicAggregate,
@@ -123,6 +127,26 @@ impl Component for Value {
         }
         len + data_len
     }
+
+    fn encoded_len(&self) -> usize {
+        1 + 1
+            + if self.flags.is_extended_length() {
+                2
+            } else {
+                1
+            }
+            + match &self.data {
+                Data::Origin(origin) => origin.encoded_len(),
+                Data::AsPath(as_path) | Data::As4Path(as_path) => as_path.encoded_len(),
+                Data::NextHop(next_hop) => next_hop.encoded_len(),
+                Data::MultiExitDisc(_) | Data::LocalPref(_) => 4,
+                Data::AtomicAggregate => 0,
+                Data::Aggregator(agg) => agg.encoded_len(),
+                Data::MpReachNlri(mp_reach_nlri) => mp_reach_nlri.encoded_len(),
+                Data::MpUnreachNlri(mp_unreach_nlri) => mp_unreach_nlri.encoded_len(),
+                Data::Unsupported(_, data) => data.len(),
+            }
+    }
 }
 
 /// BGP path attribute flags
@@ -130,6 +154,11 @@ impl Component for Value {
 pub struct Flags(pub u8);
 
 impl Flags {
+    /// Transitive, well-known, complete
+    pub const WELL_KNOWN_COMPLETE: Flags = Flags(0b0100_0000);
+    /// Optional, Extended Length, Non-transitive, Complete
+    pub const OPTIONAL_TRANSITIVE_EXTENDED: Flags = Flags(0b1001_0000);
+
     /// Check if the attribute is optional
     pub const fn is_optional(self) -> bool {
         self.0 & 0x80 == 0
@@ -158,8 +187,7 @@ pub enum Data {
     Origin(Origin),
     AsPath(AsPath),
     /// BGP next hop (RFC 4271 Section 5.1.3)
-    /// The RFC only allows IPv4 addresses, but I am taking the liberty to use `IpAddr`.
-    NextHop(IpAddr),
+    NextHop(Ipv4Addr),
     MultiExitDisc(u32),
     LocalPref(u32),
     AtomicAggregate,
@@ -231,6 +259,10 @@ impl Component for Origin {
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
         dst.put_u8(self as u8);
+        self.encoded_len()
+    }
+
+    fn encoded_len(&self) -> usize {
         1
     }
 }
@@ -254,6 +286,10 @@ impl Component for AsPath {
             len += segment.to_bytes(dst);
         }
         len
+    }
+
+    fn encoded_len(&self) -> usize {
+        self.0.iter().map(AsSegment::encoded_len).sum()
     }
 }
 
@@ -320,22 +356,22 @@ impl Component for AsSegment {
     }
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
-        let mut len = 0;
+        let encoded_len = self.encoded_len();
         dst.put_u8(self.type_ as u8);
-        len += 1;
         let asns_len = self.asns.len();
         dst.put_u8(u8::try_from(asns_len).expect("AS segment length overflow"));
-        len += 1;
         for asn in self.asns {
             if self.as4 {
                 dst.put_u32(asn);
-                len += 4;
             } else {
                 dst.put_u16(u16::try_from(asn).expect("4-byte ASN in 2-byte AS path"));
-                len += 2;
             }
         }
-        len
+        encoded_len
+    }
+
+    fn encoded_len(&self) -> usize {
+        2 + self.asns.len() * if self.as4 { 4 } else { 2 }
     }
 }
 
@@ -356,6 +392,10 @@ impl Component for Aggregator {
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
         dst.put_u16(self.asn);
         self.ip.to_bytes(dst) + 2 // 2 bytes for ASN
+    }
+
+    fn encoded_len(&self) -> usize {
+        4 + 2
     }
 }
 
@@ -379,20 +419,7 @@ impl Component for MpReachNlri {
         })?;
         let nh_len = src.get_u8() as usize;
         let mut nh_src = src.split_to(nh_len);
-        let next_hop = match nh_len {
-            4 | 16 => MpNextHop::Single(IpAddr::from_bytes(&mut nh_src)?),
-            32 => {
-                let v6local = Ipv6Addr::from_bytes(&mut nh_src)?;
-                let v6ll = Ipv6Addr::from_bytes(&mut nh_src)?;
-                MpNextHop::V6AndLL(v6local, v6ll)
-            }
-            _ => {
-                return Err(super::endec::Error::InternalType(
-                    "MP_REACH_NLRI next hop length",
-                    u16::try_from(nh_len).unwrap(),
-                ))
-            }
-        };
+        let next_hop = MpNextHop::from_bytes(&mut nh_src)?;
         let _ = src.get_u8(); // Reserved
         let nlri = Routes::from_bytes(src)?;
         Ok(Self {
@@ -409,32 +436,72 @@ impl Component for MpReachNlri {
         len += 2;
         dst.put_u8(u8::try_from(self.safi as u16).expect("MP_REACH_NLRI SAFI out of range"));
         len += 1;
-        match self.next_hop {
-            MpNextHop::Single(IpAddr::V4(ip)) => {
-                dst.put_u8(4);
-                len += ip.to_bytes(dst) + 1; // 1 byte for length
-            }
-            MpNextHop::Single(IpAddr::V6(ip)) => {
-                dst.put_u8(16);
-                len += ip.to_bytes(dst) + 1; // 1 byte for length
-            }
-            MpNextHop::V6AndLL(v6local, v6ll) => {
-                dst.put_u8(32);
-                len += v6local.to_bytes(dst) + v6ll.to_bytes(dst) + 1; // 1 byte for length
-            }
-        }
+        dst.put_u8(
+            u8::try_from(self.next_hop.encoded_len())
+                .expect("MP_REACH_NLRI next hop length overflow"),
+        );
+        len += 1;
+        len += self.next_hop.to_bytes(dst);
         dst.put_u8(0); // Reserved
         len += 1;
         len += self.nlri.to_bytes(dst);
         len
     }
+
+    fn encoded_len(&self) -> usize {
+        2 + 1 + 1 + self.next_hop.encoded_len() + 1 + self.nlri.encoded_len()
+    }
 }
 
 /// Next hop for MP_REACH_NLRI
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum MpNextHop {
     Single(IpAddr),
     V6AndLL(Ipv6Addr, Ipv6Addr),
+}
+
+impl Component for MpNextHop {
+    fn from_bytes(src: &mut Bytes) -> Result<Self, super::endec::Error> {
+        match src.remaining() {
+            4 | 16 => Ok(MpNextHop::Single(IpAddr::from_bytes(src)?)),
+            32 => {
+                let v6local = Ipv6Addr::from_bytes(src)?;
+                let v6ll = Ipv6Addr::from_bytes(src)?;
+                Ok(MpNextHop::V6AndLL(v6local, v6ll))
+            }
+            _ => Err(super::endec::Error::InternalLength(
+                "MP_NEXT_HOP",
+                std::cmp::Ordering::Equal,
+            )),
+        }
+    }
+
+    fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
+        match self {
+            MpNextHop::Single(ip) => {
+                ip.to_bytes(dst);
+            }
+            MpNextHop::V6AndLL(v6local, v6ll) => {
+                v6local.to_bytes(dst);
+                v6ll.to_bytes(dst);
+            }
+        };
+        self.encoded_len()
+    }
+
+    fn encoded_len(&self) -> usize {
+        match self {
+            MpNextHop::Single(IpAddr::V4(_)) => 4,
+            MpNextHop::Single(IpAddr::V6(_)) => 16,
+            MpNextHop::V6AndLL(_, _) => 32,
+        }
+    }
+}
+
+impl From<IpAddr> for MpNextHop {
+    fn from(ip: IpAddr) -> Self {
+        MpNextHop::Single(ip)
+    }
 }
 
 /// BGP MP_UNREACH_NLRI (RFC 4760 Section 7)
@@ -470,6 +537,10 @@ impl Component for MpUnreachNlri {
         len += 1;
         len += self.withdrawn_routes.to_bytes(dst);
         len
+    }
+
+    fn encoded_len(&self) -> usize {
+        3 + self.withdrawn_routes.encoded_len()
     }
 }
 
@@ -533,7 +604,7 @@ mod tests {
             pa,
             Value {
                 flags: Flags(0x40),
-                data: Data::NextHop(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
+                data: Data::NextHop(Ipv4Addr::new(127, 0, 0, 1)),
             }
         );
     }

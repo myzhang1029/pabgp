@@ -1,13 +1,12 @@
 mod arg;
 mod bgp;
-mod cidr;
 mod rirstat;
 mod session;
 
 use clap::Parser;
 use rirstat::{Database, DatabaseDiff};
 use session::Feeder;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::broadcast;
 
 fn setup_logger() {
     let config = simplelog::ConfigBuilder::new()
@@ -23,15 +22,19 @@ fn setup_logger() {
 }
 
 async fn handle_session(
-    initial_db: Database,
+    init_db: Database,
     recv_updates: broadcast::Receiver<DatabaseDiff>,
     socket: tokio::net::TcpStream,
     local_as: u32,
     local_id: std::net::Ipv4Addr,
     next_hop: std::net::IpAddr,
 ) {
+    let (ipv4_routes, ipv6_routes) = init_db.into_prefixes();
+    let init_ipv4_routes = Some(ipv4_routes.into_values().flatten().into());
+    let init_ipv6_routes = Some(ipv6_routes.into_values().flatten().into());
     let mut session = Feeder::new(
-        initial_db,
+        init_ipv4_routes,
+        init_ipv6_routes,
         recv_updates,
         socket,
         local_as,
@@ -46,16 +49,9 @@ async fn handle_session(
 fn updater(
     mut init_db: Database,
     send_updates: &broadcast::Sender<DatabaseDiff>,
-    mut updater_task_should_exit_rx: oneshot::Receiver<()>,
     update_interval: std::time::Duration,
 ) {
     loop {
-        match updater_task_should_exit_rx.try_recv() {
-            Ok(()) | Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
-                break;
-            }
-            Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
-        }
         let diff = init_db.update_with_diff().expect("TODO: handle error");
         send_updates.send(diff).expect("TODO: handle error");
         std::thread::sleep(update_interval);
@@ -66,7 +62,7 @@ fn updater(
 async fn main() {
     setup_logger();
     let args = arg::DelegationFeed::parse();
-    let mut db = Database::new(args.countries.clone());
+    let mut db = Database::new(args.countries.clone(), args.enable_ipv4, args.enable_ipv6);
     let local_as = args.local_as;
     let local_id = args.local_id;
     let next_hop = args.next_hop.unwrap_or_else(|| local_id.into());
@@ -76,15 +72,9 @@ async fn main() {
         .await
         .expect("Failed to bind to listen address");
     let (send_updates, mut recv_updates) = broadcast::channel(16);
-    let (updater_task_should_exit_tx, updater_task_should_exit_rx) = oneshot::channel::<()>();
-    let updater_copy = db.clone();
+    let updater_copy = dbg!(db.clone());
     tokio::task::spawn_blocking(move || {
-        updater(
-            updater_copy,
-            &send_updates,
-            updater_task_should_exit_rx,
-            update_interval,
-        );
+        updater(updater_copy, &send_updates, update_interval);
     });
     loop {
         let sub_recv_updates = recv_updates.resubscribe();
