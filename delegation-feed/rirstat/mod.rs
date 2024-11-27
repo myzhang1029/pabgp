@@ -430,7 +430,7 @@ mod tests {
         let should_be_in = Cidr4::new("192.174.4.0".parse().unwrap(), 22);
         assert!(db.ipv4_prefixes[&country].contains(&should_be_in));
         assert!(!db.ipv6_prefixes.is_empty());
-        let should_be_in = Cidr6::new("2604:cfc0::".parse().unwrap(), 32);
+        let should_be_in = Cidr6::new("2001:4e8::".parse().unwrap(), 32);
         assert!(db.ipv6_prefixes[&country].contains(&should_be_in));
     }
 }
