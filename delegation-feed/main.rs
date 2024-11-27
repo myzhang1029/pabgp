@@ -69,14 +69,14 @@ fn dry_run_and_exit(mut db: Database) -> ! {
     db.update_all().expect("Failed to update database");
     let (ipv4_prefixes, ipv6_prefixes) = db.into_prefixes();
     println!("IPv4 prefixes:");
-    for (country, prefixes) in ipv4_prefixes.iter() {
+    for (country, prefixes) in &ipv4_prefixes {
         println!("  {country}:");
         for prefix in prefixes {
             println!("    {prefix}");
         }
     }
     println!("IPv6 prefixes:");
-    for (country, prefixes) in ipv6_prefixes.iter() {
+    for (country, prefixes) in &ipv6_prefixes {
         println!("  {country}:");
         for prefix in prefixes {
             println!("    {prefix}");

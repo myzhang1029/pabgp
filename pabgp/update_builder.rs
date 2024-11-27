@@ -83,7 +83,7 @@ impl UpdateBuilder {
 
     /// Set the origin.
     #[must_use]
-    pub fn set_origin(mut self, origin: Origin) -> Self {
+    pub const fn set_origin(mut self, origin: Origin) -> Self {
         self.origin = Some(origin);
         self
     }
@@ -99,7 +99,7 @@ impl UpdateBuilder {
 
     /// Set the next hop.
     #[must_use]
-    pub fn set_next_hop(mut self, next_hop: MpNextHop) -> Self {
+    pub const fn set_next_hop(mut self, next_hop: MpNextHop) -> Self {
         self.next_hop = Some(next_hop);
         self
     }
@@ -136,8 +136,8 @@ impl UpdateBuilder {
         }
     }
 
-    /// Make an MP_UNREACH_NLRI path attribute from a list of routes.
-    fn make_mp_unreach_nlri(routes: Routes, afi: Afi) -> path::Value {
+    /// Make an `MP_UNREACH_NLRI` path attribute from a list of routes.
+    const fn make_mp_unreach_nlri(routes: Routes, afi: Afi) -> path::Value {
         let mp_unreach_nlri = path::MpUnreachNlri {
             afi,
             safi: Safi::Unicast,
@@ -149,8 +149,8 @@ impl UpdateBuilder {
         }
     }
 
-    /// Make an MP_REACH_NLRI path attribute from a list of routes.
-    fn make_mp_reach_nlri(routes: Routes, afi: Afi, next_hop: MpNextHop) -> path::Value {
+    /// Make an `MP_REACH_NLRI` path attribute from a list of routes.
+    const fn make_mp_reach_nlri(routes: Routes, afi: Afi, next_hop: MpNextHop) -> path::Value {
         let mp_reach_nlri = path::MpReachNlri {
             afi,
             safi: Safi::Unicast,
@@ -163,7 +163,7 @@ impl UpdateBuilder {
         }
     }
 
-    /// Make an MP_UNREACH UPDATE message from routes split into smaller chunks.
+    /// Make an `MP_UNREACH` UPDATE message from routes split into smaller chunks.
     fn make_mp_unreach_update(
         all_withdrawn_routes: Routes,
         afi: Afi,
@@ -187,7 +187,7 @@ impl UpdateBuilder {
         }
     }
 
-    /// Make an MP_REACH UPDATE message from routes split into smaller chunks.
+    /// Make an `MP_REACH` UPDATE message from routes split into smaller chunks.
     fn make_mp_reach_update(
         all_nlri_routes: Routes,
         afi: Afi,

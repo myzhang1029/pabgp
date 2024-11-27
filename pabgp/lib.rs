@@ -187,7 +187,7 @@ impl Component for Update {
 }
 
 /// BGP notification message
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Notification {
     pub error_code: NotificationErrorCode,
     pub error_subcode: u8,
@@ -221,7 +221,7 @@ impl Component for Notification {
 
 impl Notification {
     /// Create a new BGP notification message
-    pub fn new(error_code: NotificationErrorCode, error_subcode: u8, data: bytes::Bytes) -> Self {
+    pub const fn new(error_code: NotificationErrorCode, error_subcode: u8, data: bytes::Bytes) -> Self {
         Self {
             error_code,
             error_subcode,
@@ -242,7 +242,7 @@ pub enum NotificationErrorCode {
     Cease = 6,
 }
 
-/// Notification error subcodes for MessageHeaderError
+/// Notification error subcodes for `MessageHeaderError`
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Primitive)]
 #[repr(u8)]
 pub enum MessageHeaderErrorSubcode {
@@ -251,7 +251,7 @@ pub enum MessageHeaderErrorSubcode {
     BadMessageType = 3,
 }
 
-/// Notification error subcodes for OpenMessageError
+/// Notification error subcodes for `OpenMessageError`
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Primitive)]
 #[repr(u8)]
 pub enum OpenMessageErrorSubcode {
@@ -262,7 +262,7 @@ pub enum OpenMessageErrorSubcode {
     UnacceptableHoldTime = 6,
 }
 
-/// Notification error subcodes for UpdateMessageError
+/// Notification error subcodes for `UpdateMessageError`
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Primitive)]
 #[repr(u8)]
 pub enum UpdateMessageErrorSubcode {

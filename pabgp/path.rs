@@ -155,9 +155,9 @@ pub struct Flags(pub u8);
 
 impl Flags {
     /// Transitive, well-known, complete
-    pub const WELL_KNOWN_COMPLETE: Flags = Flags(0b0100_0000);
+    pub const WELL_KNOWN_COMPLETE: Self = Self(0b0100_0000);
     /// Optional, Extended Length, Non-transitive, Complete
-    pub const OPTIONAL_TRANSITIVE_EXTENDED: Flags = Flags(0b1001_0000);
+    pub const OPTIONAL_TRANSITIVE_EXTENDED: Self = Self(0b1001_0000);
 
     /// Check if the attribute is optional
     #[must_use]
@@ -223,25 +223,25 @@ pub enum Type {
 }
 
 impl From<&Data> for u8 {
-    fn from(data: &Data) -> u8 {
+    fn from(data: &Data) -> Self {
         match data {
-            Data::Origin(_) => Type::Origin as u8,
-            Data::AsPath(_) => Type::AsPath as u8,
-            Data::NextHop(_) => Type::NextHop as u8,
-            Data::MultiExitDisc(_) => Type::MultiExitDisc as u8,
-            Data::LocalPref(_) => Type::LocalPref as u8,
-            Data::AtomicAggregate => Type::AtomicAggregate as u8,
-            Data::Aggregator(_) => Type::Aggregator as u8,
-            Data::MpReachNlri(_) => Type::MpReachNlri as u8,
-            Data::MpUnreachNlri(_) => Type::MpUnreachNlri as u8,
-            Data::As4Path(_) => Type::As4Path as u8,
+            Data::Origin(_) => Type::Origin as Self,
+            Data::AsPath(_) => Type::AsPath as Self,
+            Data::NextHop(_) => Type::NextHop as Self,
+            Data::MultiExitDisc(_) => Type::MultiExitDisc as Self,
+            Data::LocalPref(_) => Type::LocalPref as Self,
+            Data::AtomicAggregate => Type::AtomicAggregate as Self,
+            Data::Aggregator(_) => Type::Aggregator as Self,
+            Data::MpReachNlri(_) => Type::MpReachNlri as Self,
+            Data::MpUnreachNlri(_) => Type::MpUnreachNlri as Self,
+            Data::As4Path(_) => Type::As4Path as Self,
             Data::Unsupported(type_, _) => *type_,
         }
     }
 }
 
 /// BGP origin
-#[derive(Copy, Clone, Debug, PartialEq, Primitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Primitive)]
 #[repr(u8)]
 pub enum Origin {
     Igp = 0,
@@ -303,7 +303,7 @@ impl Deref for AsPath {
 }
 
 /// BGP AS path segment (RFC 4271 Section 5.1.2, RFC 6793 Section 4)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AsSegment {
     pub type_: AsSegmentType,
     pub asns: Vec<u32>,
@@ -313,7 +313,7 @@ pub struct AsSegment {
 }
 
 /// BGP AS path segment type
-#[derive(Copy, Clone, Debug, PartialEq, Primitive)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Primitive)]
 #[repr(u8)]
 pub enum AsSegmentType {
     AsSet = 1,
@@ -377,7 +377,7 @@ impl Component for AsSegment {
 }
 
 /// BGP aggregator (RFC 4271 Section 5.1.7)
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Aggregator {
     pub asn: u16,
     pub ip: Ipv4Addr,
@@ -400,7 +400,7 @@ impl Component for Aggregator {
     }
 }
 
-/// BGP MP_REACH_NLRI (RFC 4760 Section 7)
+/// BGP `MP_REACH_NLRI` (RFC 4760 Section 7)
 #[derive(Clone, Debug, PartialEq)]
 pub struct MpReachNlri {
     pub afi: Afi,
@@ -453,8 +453,8 @@ impl Component for MpReachNlri {
     }
 }
 
-/// Next hop for MP_REACH_NLRI
-#[derive(Copy, Clone, Debug, PartialEq)]
+/// Next hop for `MP_REACH_NLRI`
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MpNextHop {
     Single(IpAddr),
     V6AndLL(Ipv6Addr, Ipv6Addr),
@@ -463,11 +463,11 @@ pub enum MpNextHop {
 impl Component for MpNextHop {
     fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         match src.remaining() {
-            4 | 16 => Ok(MpNextHop::Single(IpAddr::from_bytes(src)?)),
+            4 | 16 => Ok(Self::Single(IpAddr::from_bytes(src)?)),
             32 => {
                 let v6local = Ipv6Addr::from_bytes(src)?;
                 let v6ll = Ipv6Addr::from_bytes(src)?;
-                Ok(MpNextHop::V6AndLL(v6local, v6ll))
+                Ok(Self::V6AndLL(v6local, v6ll))
             }
             _ => Err(crate::Error::InternalLength(
                 "MP_NEXT_HOP",
@@ -478,10 +478,10 @@ impl Component for MpNextHop {
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
         match self {
-            MpNextHop::Single(ip) => {
+            Self::Single(ip) => {
                 ip.to_bytes(dst);
             }
-            MpNextHop::V6AndLL(v6local, v6ll) => {
+            Self::V6AndLL(v6local, v6ll) => {
                 v6local.to_bytes(dst);
                 v6ll.to_bytes(dst);
             }
@@ -491,20 +491,20 @@ impl Component for MpNextHop {
 
     fn encoded_len(&self) -> usize {
         match self {
-            MpNextHop::Single(IpAddr::V4(_)) => 4,
-            MpNextHop::Single(IpAddr::V6(_)) => 16,
-            MpNextHop::V6AndLL(_, _) => 32,
+            Self::Single(IpAddr::V4(_)) => 4,
+            Self::Single(IpAddr::V6(_)) => 16,
+            Self::V6AndLL(_, _) => 32,
         }
     }
 }
 
 impl From<IpAddr> for MpNextHop {
     fn from(ip: IpAddr) -> Self {
-        MpNextHop::Single(ip)
+        Self::Single(ip)
     }
 }
 
-/// BGP MP_UNREACH_NLRI (RFC 4760 Section 7)
+/// BGP `MP_UNREACH_NLRI` (RFC 4760 Section 7)
 #[derive(Clone, Debug, PartialEq)]
 pub struct MpUnreachNlri {
     pub afi: Afi,

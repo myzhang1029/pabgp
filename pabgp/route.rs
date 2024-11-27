@@ -2,7 +2,7 @@
 //!
 //! These structures do not contain information about the address family of
 //! the route as they correspond to BGP's NLRI fields. To determine the address
-//! family, the caller must know the context (BGP.nlri, MP_REACH_NLRI, etc).
+//! family, the caller must know the context (BGP.nlri, `MP_REACH_NLRI`, etc).
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -26,7 +26,7 @@ fn n_prefix_octets(prefix_len: u8) -> usize {
 ///
 /// Corresponding to a compact representation of a u8 prefix length and the
 /// minimum number of octets to represent the prefix.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Value {
     pub prefix_len: u8,
     pub prefix: Bytes,
@@ -35,7 +35,7 @@ pub struct Value {
 /// BGP routes
 ///
 /// Corresponding to a compact list of CIDR blocks without a length field.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Routes(pub Vec<Value>);
 
 impl Component for Routes {

@@ -22,7 +22,7 @@ impl fmt::Display for Cidr4 {
 }
 impl Cidr4 {
     #[must_use]
-    pub fn new(addr: Ipv4Addr, prefix_len: u8) -> Self {
+    pub const fn new(addr: Ipv4Addr, prefix_len: u8) -> Self {
         Self { addr, prefix_len }
     }
 
@@ -56,7 +56,7 @@ impl fmt::Display for Cidr6 {
 
 impl Cidr6 {
     #[must_use]
-    pub fn new(addr: Ipv6Addr, prefix_len: u8) -> Self {
+    pub const fn new(addr: Ipv6Addr, prefix_len: u8) -> Self {
         Self { addr, prefix_len }
     }
 }
@@ -72,18 +72,18 @@ pub enum Cidr {
 impl fmt::Display for Cidr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Cidr::V4(cidr) => write!(f, "{cidr}"),
-            Cidr::V6(cidr) => write!(f, "{cidr}"),
+            Self::V4(cidr) => write!(f, "{cidr}"),
+            Self::V6(cidr) => write!(f, "{cidr}"),
         }
     }
 }
 
 impl Cidr {
     #[must_use]
-    pub fn into_parts(self) -> (IpAddr, u8) {
+    pub const fn into_parts(self) -> (IpAddr, u8) {
         match self {
-            Cidr::V4(cidr) => (IpAddr::V4(cidr.addr), cidr.prefix_len),
-            Cidr::V6(cidr) => (IpAddr::V6(cidr.addr), cidr.prefix_len),
+            Self::V4(cidr) => (IpAddr::V4(cidr.addr), cidr.prefix_len),
+            Self::V6(cidr) => (IpAddr::V6(cidr.addr), cidr.prefix_len),
         }
     }
 }

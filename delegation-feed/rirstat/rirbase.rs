@@ -81,7 +81,7 @@ impl CountrySpec {
     // Mainly for maps which require a reference
     #[allow(clippy::trivially_copy_pass_by_ref)]
     /// Get the RIR that manages this country's internet numbers
-    pub fn rir(&self) -> RirName {
+    pub const fn rir(&self) -> RirName {
         self.rir
     }
 }

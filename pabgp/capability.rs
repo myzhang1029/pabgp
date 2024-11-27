@@ -110,7 +110,7 @@ impl Component for OptionalParameterValue {
         let len_pos = dst.len();
         dst.put_u8(0); // Placeholder for length
         match self {
-            OptionalParameterValue::Capabilities(cap) => {
+            Self::Capabilities(cap) => {
                 let len = cap.to_bytes(dst);
                 dst[type_pos] = OptionalParameterType::Capabilities as u8;
                 dst[len_pos] = u8::try_from(len).expect("Capabilities length overflow");
@@ -121,7 +121,7 @@ impl Component for OptionalParameterValue {
 
     fn encoded_len(&self) -> usize {
         match self {
-            OptionalParameterValue::Capabilities(cap) => cap.encoded_len() + 2, // Type and length
+            Self::Capabilities(cap) => cap.encoded_len() + 2, // Type and length
         }
     }
 }
@@ -312,18 +312,18 @@ pub enum Type {
 impl From<&Value> for u8 {
     fn from(cap: &Value) -> Self {
         match cap {
-            Value::MultiProtocol(_) => Type::MultiProtocol as u8,
-            Value::RouteRefresh => Type::RouteRefresh as u8,
-            Value::ExtendedNextHop(_) => Type::ExtendedNextHop as u8,
-            Value::ExtendedMessage => Type::ExtendedMessage as u8,
-            Value::FourOctetAsNumber(_) => Type::FourOctetAsNumber as u8,
+            Value::MultiProtocol(_) => Type::MultiProtocol as Self,
+            Value::RouteRefresh => Type::RouteRefresh as Self,
+            Value::ExtendedNextHop(_) => Type::ExtendedNextHop as Self,
+            Value::ExtendedMessage => Type::ExtendedMessage as Self,
+            Value::FourOctetAsNumber(_) => Type::FourOctetAsNumber as Self,
             Value::Unsupported(code, _) => *code,
         }
     }
 }
 
 /// BGP multi-protocol capability value field (RFC 2858 Section 7)
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MultiProtocol {
     pub afi: Afi,
     pub safi: Safi,
@@ -378,7 +378,7 @@ pub enum Safi {
 }
 
 /// BGP extended next hop capability (RFC 8950)
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExtendedNextHop(pub Vec<ExtendedNextHopValue>);
 
 impl From<Vec<ExtendedNextHopValue>> for ExtendedNextHop {
@@ -396,7 +396,7 @@ impl Deref for ExtendedNextHop {
 }
 
 /// BGP extended next hop value field (RFC 8950)
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct ExtendedNextHopValue {
     pub afi: Afi,
     pub safi: Safi,
@@ -442,7 +442,7 @@ impl Component for ExtendedNextHop {
 }
 
 /// BGP four-octet AS number capability value field (RFC 6793)
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct FourOctetAsNumber {
     pub asn: u32,
 }

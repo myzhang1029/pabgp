@@ -316,6 +316,9 @@ impl Database {
                 let addr = parts[3].parse().ok()?;
                 let num_hosts = parts[4].parse().ok()?;
                 let cidr = Cidr4::from_num_hosts(addr, num_hosts);
+                if num_hosts >> num_hosts.trailing_zeros() != 1 {
+                    log::error!("Number of hosts of {num_hosts} does not conform to CIDR");
+                }
                 Some((country, Cidr::V4(cidr)))
             }
             "ipv6" => {

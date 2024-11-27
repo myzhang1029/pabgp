@@ -7,6 +7,7 @@ use clap::Parser;
 use std::net::{IpAddr, Ipv4Addr};
 
 #[derive(Parser, Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct DelegationFeed {
     /// Our AS number (supports 4-byte AS number)
     #[arg(required_unless_present = "dry_run", default_value = "0")]
