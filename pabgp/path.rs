@@ -252,10 +252,10 @@ pub enum Origin {
 impl Component for Origin {
     fn from_bytes(src: &mut Bytes) -> Result<Self, crate::Error> {
         let value = src.get_u8();
-        match Self::from_u8(value) {
-            Some(origin) => Ok(origin),
-            None => Err(crate::Error::InternalType("origin", u16::from(value))),
-        }
+        Self::from_u8(value).map_or_else(
+            || Err(crate::Error::InternalType("origin", u16::from(value))),
+            Ok,
+        )
     }
 
     fn to_bytes(self, dst: &mut bytes::BytesMut) -> usize {
@@ -269,7 +269,7 @@ impl Component for Origin {
 }
 
 /// BGP AS path
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct AsPath(pub Vec<AsSegment>);
 
 impl Component for AsPath {
@@ -347,10 +347,8 @@ impl Component for AsSegment {
             ));
         };
         Ok(Self {
-            type_: AsSegmentType::from_u8(type_).ok_or(crate::Error::InternalType(
-                "AS segment type",
-                u16::from(type_),
-            ))?,
+            type_: AsSegmentType::from_u8(type_)
+                .ok_or_else(|| crate::Error::InternalType("AS segment type", u16::from(type_)))?,
             asns,
             as4,
         })
@@ -401,7 +399,7 @@ impl Component for Aggregator {
 }
 
 /// BGP `MP_REACH_NLRI` (RFC 4760 Section 7)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MpReachNlri {
     pub afi: Afi,
     pub safi: Safi,
@@ -505,7 +503,7 @@ impl From<IpAddr> for MpNextHop {
 }
 
 /// BGP `MP_UNREACH_NLRI` (RFC 4760 Section 7)
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MpUnreachNlri {
     pub afi: Afi,
     pub safi: Safi,

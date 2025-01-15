@@ -221,7 +221,11 @@ impl Component for Notification {
 
 impl Notification {
     /// Create a new BGP notification message
-    pub const fn new(error_code: NotificationErrorCode, error_subcode: u8, data: bytes::Bytes) -> Self {
+    pub const fn new(
+        error_code: NotificationErrorCode,
+        error_subcode: u8,
+        data: bytes::Bytes,
+    ) -> Self {
         Self {
             error_code,
             error_subcode,
