@@ -5,6 +5,7 @@
 
 pub mod rirbase;
 
+use http::{StatusCode, Response};
 use lazy_static::lazy_static;
 use pabgp::cidr::{Cidr, Cidr4, Cidr6};
 use rirbase::{CountrySpec, RirName};
@@ -37,7 +38,7 @@ lazy_static! {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("HTTP request returned status {0}")]
-    HttpStatus(u16),
+    HttpStatus(StatusCode),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -186,7 +187,7 @@ impl Database {
             let url = RIR_INFO[&rir];
             let response = ureq::get(url).call().map_err(Box::new)?;
             match response.status() {
-                200 => {
+                StatusCode::OK => {
                     if self.update_from_response(response, rir)? {
                         log::info!("Updated database with {rir}");
                         updated.insert(rir);
@@ -232,10 +233,11 @@ impl Database {
     /// - Err(_) if the response was invalid.
     fn update_from_response(
         &mut self,
-        response: ureq::Response,
+        response: Response<ureq::Body>,
         expected_rir: RirName,
     ) -> Result<bool, Error> {
-        let reader = std::io::BufReader::new(response.into_reader());
+        let body = response.into_body();
+        let reader = std::io::BufReader::new(body.into_reader());
         let mut lines = reader.lines().enumerate();
         // Find the header line
         for (_, line) in &mut lines {
