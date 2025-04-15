@@ -483,7 +483,7 @@ impl Component for MpNextHop {
                 v6local.to_bytes(dst);
                 v6ll.to_bytes(dst);
             }
-        };
+        }
         self.encoded_len()
     }
 

@@ -41,7 +41,7 @@ async fn handle_session(
         next_hop,
     );
     if let Err(e) = session.idle().await {
-        log::error!("Session error: {:?}", e);
+        log::error!("Session error: {e:?}");
     }
 }
 
@@ -52,7 +52,7 @@ fn updater(
 ) {
     loop {
         let diff = init_db.update_with_diff().unwrap_or_else(|e| {
-            log::error!("Database update failed: {:?}", e);
+            log::error!("Database update failed: {e:?}");
             DatabaseDiff::default()
         });
         if send_updates.send(diff).is_err() {

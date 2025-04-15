@@ -239,7 +239,7 @@ impl Feeder {
                 log::debug!("No further processing implemented");
             }
             Message::Open(_) => {
-                log::warn!("Received unexpected OPEN message from peer: {:?}", packet);
+                log::warn!("Received unexpected OPEN message from peer: {packet:?}");
             }
         }
         Ok(())

@@ -5,14 +5,14 @@
 
 pub mod rirbase;
 
-use http::{StatusCode, Response};
-use lazy_static::lazy_static;
+use http::{Response, StatusCode};
 use pabgp::cidr::{Cidr, Cidr4, Cidr6};
 use rirbase::{CountrySpec, RirName};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufRead;
+use std::sync::LazyLock;
 
 pub const ARIN_URL: &str = "https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest";
 pub const RIPE_URL: &str = "https://ftp.ripe.net/ripe/stats/delegated-ripencc-latest";
@@ -21,8 +21,8 @@ pub const LACNIC_URL: &str = "https://ftp.lacnic.net/pub/stats/lacnic/delegated-
 pub const AFRINIC_URL: &str = "https://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-latest";
 pub const SUPPORTED_VERSIONS: [&str; 2] = ["2", "2.3"];
 
-lazy_static! {
-    static ref RIR_INFO: HashMap<RirName, &'static str> = [
+static RIR_INFO: LazyLock<HashMap<RirName, &'static str>> = LazyLock::new(|| {
+    [
         (RirName::Arin, ARIN_URL),
         (RirName::Ripencc, RIPE_URL),
         (RirName::Apnic, APNIC_URL),
@@ -31,8 +31,8 @@ lazy_static! {
     ]
     .iter()
     .copied()
-    .collect();
-}
+    .collect()
+});
 
 /// Error type for dealing with RIR statistics parsing
 #[derive(Debug, thiserror::Error)]
@@ -101,7 +101,7 @@ impl DatabaseDiff {
             let new_prefixes: Vec<Cidr4> = prefixes
                 .iter()
                 // Keep those that are not in the old prefixes
-                .filter(|prefix| old_prefixes.map_or(true, |p| !p.contains(prefix)))
+                .filter(|prefix| old_prefixes.is_none_or(|p| !p.contains(prefix)))
                 .copied()
                 .collect();
             let withdrawn_prefixes: Vec<Cidr4> = old_prefixes.map_or(vec![], |p| {
@@ -127,7 +127,7 @@ impl DatabaseDiff {
             let new_prefixes: Vec<Cidr6> = prefixes
                 .iter()
                 // Keep those that are not in the old prefixes
-                .filter(|prefix| old_prefixes.map_or(true, |p| !p.contains(prefix)))
+                .filter(|prefix| old_prefixes.is_none_or(|p| !p.contains(prefix)))
                 .copied()
                 .collect();
             let withdrawn_prefixes: Vec<Cidr6> = old_prefixes.map_or(vec![], |p| {
@@ -182,7 +182,7 @@ impl Database {
     pub fn update_all(&mut self) -> Result<HashSet<RirName>, Error> {
         let needed_rirs = self.needed_rirs();
         let mut updated = HashSet::new();
-        log::info!("Updating from RIRs: {:?}", needed_rirs);
+        log::info!("Updating from RIRs: {needed_rirs:?}");
         for rir in needed_rirs {
             let url = RIR_INFO[&rir];
             let response = ureq::get(url).call().map_err(Box::new)?;
@@ -271,7 +271,7 @@ impl Database {
     ///  - Err(_) if the header is invalid.
     fn check_header(line: &str, expected_rir: RirName) -> Result<Option<u64>, Error> {
         if line.starts_with('#') {
-            log::debug!("skipping line: {:?}", line);
+            log::debug!("skipping line: {line:?}");
             return Ok(None);
         }
         let parts = line.splitn(7, '|').collect::<Vec<_>>();
@@ -286,7 +286,7 @@ impl Database {
         let serial: u64 = parts[2]
             .parse()
             .map_err(|_| Error::InvalidHeader(line.to_string()))?;
-        log::debug!("found header: {:?}", parts);
+        log::debug!("found header: {parts:?}");
         if rir != expected_rir {
             return Err(Error::UnexpectedRir(rir, expected_rir));
         }
