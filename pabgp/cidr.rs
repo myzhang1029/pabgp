@@ -31,12 +31,29 @@ impl Cidr4 {
     /// # Panics
     /// Will panic if the number of hosts is more than 2^32
     #[must_use]
-    pub fn from_num_hosts(start: Ipv4Addr, num_hosts: u32) -> Self {
-        let prefix_len = u8::try_from(32 - num_hosts.ilog2()).expect("Invalid prefix length");
-        Self {
-            addr: start,
-            prefix_len,
+    pub fn from_num_hosts(start: Ipv4Addr, num_hosts: u32) -> Vec<Self> {
+        let mut cidrs = Vec::with_capacity(num_hosts.count_ones() as usize);
+        let mut current_addr = u32::from(start);
+        let mut remaining_hosts = num_hosts;
+        while remaining_hosts > 0 {
+            let biggest_netbits = remaining_hosts.ilog2();
+            let netsize = 1 << biggest_netbits;
+            let prefix_len = 32 - biggest_netbits;
+            if current_addr % netsize != 0 {
+                log::error!(
+                    "Network address {current_addr} is not aligned to block size {netsize}"
+                );
+            }
+            // This unwrap never fails because biggest_netbits is at most 32
+            let cidr = Self::new(
+                Ipv4Addr::from(current_addr),
+                u8::try_from(prefix_len).unwrap(),
+            );
+            cidrs.push(cidr);
+            current_addr += netsize;
+            remaining_hosts -= netsize;
         }
+        cidrs
     }
 }
 

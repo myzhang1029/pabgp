@@ -300,7 +300,7 @@ impl Database {
     ///
     /// If the line does not represent an ipv4/ipv6 record, return None.
     /// Otherwise, return the country and CIDR block.
-    fn parse_line(line: &str) -> Option<(CountrySpec, Cidr)> {
+    fn parse_line(line: &str) -> Option<(CountrySpec, Vec<Cidr>)> {
         if line.starts_with('#') {
             return None;
         }
@@ -317,17 +317,17 @@ impl Database {
             "ipv4" => {
                 let addr = parts[3].parse().ok()?;
                 let num_hosts = parts[4].parse().ok()?;
-                let cidr = Cidr4::from_num_hosts(addr, num_hosts);
-                if num_hosts >> num_hosts.trailing_zeros() != 1 {
-                    log::error!("Number of hosts of {num_hosts} does not conform to CIDR");
-                }
-                Some((country, Cidr::V4(cidr)))
+                let cidrs = Cidr4::from_num_hosts(addr, num_hosts)
+                    .into_iter()
+                    .map(Cidr::V4)
+                    .collect();
+                Some((country, cidrs))
             }
             "ipv6" => {
                 let addr = parts[3].parse().ok()?;
                 let prefix_len = parts[4].parse().ok()?;
                 let cidr = Cidr6::new(addr, prefix_len);
-                Some((country, Cidr::V6(cidr)))
+                Some((country, vec![Cidr::V6(cidr)]))
             }
             _ => None,
         }
@@ -340,20 +340,22 @@ impl Database {
 
     /// Update from a single line of a RIR statistics file
     fn update_from_line(&mut self, line: &str) {
-        if let Some((country, cidr)) = Self::parse_line(line) {
+        if let Some((country, cidr_vec)) = Self::parse_line(line) {
             if !self.country_specs.contains(&country) {
                 // We don't care about this country
                 return;
             }
-            match cidr {
-                Cidr::V4(cidr) => {
-                    if self.enable_ipv4 {
-                        self.ipv4_prefixes.entry(country).or_default().push(cidr);
+            for cidr in cidr_vec {
+                match cidr {
+                    Cidr::V4(cidr) => {
+                        if self.enable_ipv4 {
+                            self.ipv4_prefixes.entry(country).or_default().push(cidr);
+                        }
                     }
-                }
-                Cidr::V6(cidr) => {
-                    if self.enable_ipv6 {
-                        self.ipv6_prefixes.entry(country).or_default().push(cidr);
+                    Cidr::V6(cidr) => {
+                        if self.enable_ipv6 {
+                            self.ipv6_prefixes.entry(country).or_default().push(cidr);
+                        }
                     }
                 }
             }
@@ -383,7 +385,28 @@ mod tests {
         let (country, cidr) = Database::parse_line(line).unwrap();
         assert_eq!(country, "apnic:CN".parse().unwrap());
         let expected_addr: IpAddr = "103.37.72.0".parse().unwrap();
-        assert_eq!(cidr.into_parts(), (expected_addr, 22));
+        assert_eq!(cidr.len(), 1);
+        assert_eq!(cidr[0].into_parts(), (expected_addr, 22));
+    }
+
+    #[test]
+    fn test_parse_line_v4_unaligned() {
+        let line = "apnic|CN|ipv4|103.37.72.0|1072|20140821|allocated";
+        let (country, cidrs) = Database::parse_line(line).unwrap();
+        assert_eq!(country, "apnic:CN".parse().unwrap());
+        let expected_addrs: Vec<IpAddr> = vec![
+            "103.37.72.0".parse().unwrap(),
+            "103.37.76.0".parse().unwrap(),
+            "103.37.76.32".parse().unwrap(),
+        ];
+        let expected_prefixlens = vec![22, 27, 28];
+        assert_eq!(cidrs.len(), 3);
+        for (i, cidr) in cidrs.iter().enumerate() {
+            assert_eq!(
+                cidr.into_parts(),
+                (expected_addrs[i], expected_prefixlens[i])
+            );
+        }
     }
 
     #[test]
@@ -394,7 +417,8 @@ mod tests {
         let (country, cidr) = Database::parse_line(line).unwrap();
         assert_eq!(country, "arin:US".parse().unwrap());
         let expected_addr: IpAddr = "2605:4340::".parse().unwrap();
-        assert_eq!(cidr.into_parts(), (expected_addr, 32));
+        assert_eq!(cidr.len(), 1);
+        assert_eq!(cidr[0].into_parts(), (expected_addr, 32));
     }
 
     #[test]
