@@ -218,7 +218,7 @@ impl Deref for Capabilities {
 impl Capabilities {
     /// Check if a specific capability is present
     pub fn has(&self, cap: &Value) -> bool {
-        self.0.iter().any(|v| *v == *cap)
+        self.0.contains(cap)
     }
 
     /// Check if ipv4 unicast multi-protocol capability is present
@@ -256,7 +256,7 @@ impl Capabilities {
         self.0.iter().any(|v| {
             // Find the extended next hop capability
             if let Value::ExtendedNextHop(enh) = v {
-                enh.0.iter().any(|v| *v == looking_for)
+                enh.0.contains(&looking_for)
             } else {
                 false
             }
