@@ -20,13 +20,13 @@ test-real-internet = []
 
 [dependencies]
 bytes = "1"
-clap = { version = "4.5.17", features = ["derive"]  }
+clap = { version = "4", features = ["derive"]  }
 enum-primitive-derive = "0.3"
 futures-util = { version = "0.3", features = ["sink"] }
 http = "1"
 log = "0.4"
 num-traits = "0.2"
-pabgp = { version = "0.2.1", path = "../pabgp" }
+pabgp = { version = "*", path = "../pabgp" }
 serde = { version = "1", features = ["derive"] }
 simplelog = "0.12"
 thiserror = "2"
