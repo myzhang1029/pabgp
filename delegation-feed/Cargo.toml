@@ -19,7 +19,7 @@ default = ["test-real-internet"]
 test-real-internet = []
 
 [dependencies]
-bytes = "1"
+bytes = "^1, >=1.11.1"
 clap = { version = "4", features = ["derive"]  }
 enum-primitive-derive = "0.3"
 futures-util = { version = "0.3", features = ["sink"] }
