@@ -6,8 +6,9 @@ use super::endec::*;
 use super::path::*;
 use super::route::*;
 use super::*;
+use alloc::boxed::Box;
 use bytes::{Bytes, BytesMut};
-use std::net::Ipv6Addr;
+use core::net::Ipv6Addr;
 use tokio_util::codec::{Decoder, Encoder};
 
 #[test]
@@ -88,7 +89,7 @@ fn test_open_message_wsh_2() {
     assert_eq!(*cap.get(2).unwrap(), capability::Value::RouteRefresh);
     assert_eq!(
         *cap.get(3).unwrap(),
-        capability::Value::ExtendedNextHop(ExtendedNextHop(vec![ExtendedNextHopValue {
+        capability::Value::ExtendedNextHop(ExtendedNextHop(alloc::vec![ExtendedNextHopValue {
             afi: Afi::Ipv4,
             safi: Safi::Unicast,
             next_hop_afi: Afi::Ipv6,
@@ -150,9 +151,9 @@ fn test_update_message_wsh_1() {
         *msg.path_attributes.get(1).unwrap(),
         path::Value {
             flags: path::Flags(0x40),
-            data: path::Data::AsPath(AsPath(vec![AsSegment {
+            data: path::Data::AsPath(AsPath(alloc::vec![AsSegment {
                 type_: AsSegmentType::AsSequence,
-                asns: vec![0xfd7d],
+                asns: Box::new([0xfd7d]),
                 as4: false,
             }])),
         }
@@ -168,9 +169,9 @@ fn test_update_message_wsh_1() {
         *msg.path_attributes.get(3).unwrap(),
         path::Value {
             flags: path::Flags(0xc0),
-            data: path::Data::As4Path(AsPath(vec![AsSegment {
+            data: path::Data::As4Path(AsPath(alloc::vec![AsSegment {
                 type_: AsSegmentType::AsSequence,
-                asns: vec![0xfd7d],
+                asns: Box::new([0xfd7d]),
                 as4: true,
             }])),
         }
@@ -223,7 +224,7 @@ fn test_update_message_wsh_2() {
                     Ipv6Addr::new(0xfdc0, 0xd227, 0x0306, 0xee01, 0, 0, 0, 0x0161),
                     Ipv6Addr::new(0xfe80, 0, 0, 0, 0x84cf, 0x65ff, 0xfead, 0x2f30)
                 ),
-                nlri: Routes(vec![Cidr4 {
+                nlri: Routes(alloc::vec![Cidr4 {
                     addr: Ipv4Addr::new(172, 23, 227, 0),
                     prefix_len: 24,
                 }
@@ -242,9 +243,9 @@ fn test_update_message_wsh_2() {
         *msg.path_attributes.get(2).unwrap(),
         path::Value {
             flags: path::Flags(0x40),
-            data: path::Data::AsPath(AsPath(vec![AsSegment {
+            data: path::Data::AsPath(AsPath(alloc::vec![AsSegment {
                 type_: AsSegmentType::AsSequence,
-                asns: vec![0xfcde_39d1, 0xfcde_3880, 0xfcde_3122],
+                asns: Box::new([0xfcde_39d1, 0xfcde_3880, 0xfcde_3122]),
                 as4: true,
             }])),
         }

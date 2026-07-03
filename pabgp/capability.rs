@@ -7,17 +7,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::endec::Component;
+use alloc::vec::Vec;
 use bytes::{Buf, BufMut, Bytes};
+use core::ops::{Deref, DerefMut};
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
-use std::ops::Deref;
 
 /// Check if the remaining buffer length is enough for the expected length
 macro_rules! check_remaining_len {
     ($src:expr, $len:expr, $name:expr) => {
         let cmp = $src.remaining().cmp(&$len);
         match $src.remaining().cmp(&$len) {
-            std::cmp::Ordering::Equal => {}
+            core::cmp::Ordering::Equal => {}
             _ => return Err($crate::Error::InternalLength($name, cmp)),
         }
     };
@@ -63,10 +64,16 @@ impl From<Vec<OptionalParameterValue>> for OptionalParameters {
 }
 
 impl Deref for OptionalParameters {
-    type Target = Vec<OptionalParameterValue>;
+    type Target = [OptionalParameterValue];
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for OptionalParameters {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -208,10 +215,16 @@ impl From<Vec<Value>> for Capabilities {
 }
 
 impl Deref for Capabilities {
-    type Target = Vec<Value>;
+    type Target = [Value];
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for Capabilities {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -388,10 +401,16 @@ impl From<Vec<ExtendedNextHopValue>> for ExtendedNextHop {
 }
 
 impl Deref for ExtendedNextHop {
-    type Target = Vec<ExtendedNextHopValue>;
+    type Target = [ExtendedNextHopValue];
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for ExtendedNextHop {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -592,7 +611,7 @@ mod tests {
                 safi: Safi::Unicast
             })));
         assert!(cap.0.iter().any(|v| *v
-            == Value::ExtendedNextHop(ExtendedNextHop(vec![ExtendedNextHopValue {
+            == Value::ExtendedNextHop(ExtendedNextHop(alloc::vec![ExtendedNextHopValue {
                 afi: Afi::Ipv4,
                 safi: Safi::Unicast,
                 next_hop_afi: Afi::Ipv6

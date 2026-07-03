@@ -8,8 +8,10 @@
 
 use super::cidr::{Cidr, Cidr4, Cidr6};
 use super::endec::Component;
+use alloc::vec::Vec;
 use bytes::{Buf, BufMut, Bytes};
-use std::ops::Deref;
+use core::ops::Deref;
+use std::ops::DerefMut;
 
 /// Compute the number of prefix octets from the prefix length
 fn n_prefix_octets(prefix_len: u8) -> usize {
@@ -66,10 +68,16 @@ impl Component for Routes {
 }
 
 impl Deref for Routes {
-    type Target = Vec<Value>;
+    type Target = [Value];
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for Routes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -452,7 +460,7 @@ mod tests {
                 // Won't fit even one route
                 assert_eq!(split_points, Vec::new());
             } else if allowed_size == raw_len {
-                assert_eq!(split_points, vec![routes.len()]);
+                assert_eq!(split_points, alloc::vec![routes.len()]);
             } else {
                 let mut new_routes = Vec::new();
                 let mut start = 0;
@@ -472,7 +480,7 @@ mod tests {
                 .rev()
                 .skip(1)
                 .copied()
-                .chain(std::iter::once(0))
+                .chain(core::iter::once(0))
                 .collect();
             assert_eq!(split_points_rev, should_be);
         }

@@ -7,13 +7,15 @@ use crate::{
     endec::Component,
     route::Routes,
 };
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use bytes::{Buf, BufMut, Bytes};
+use core::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+    ops::{Deref, DerefMut},
+};
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
-use std::{
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    ops::Deref,
-};
 
 /// BGP path attributes
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -43,10 +45,16 @@ impl Component for PathAttributes {
 }
 
 impl Deref for PathAttributes {
-    type Target = Vec<Value>;
+    type Target = [Value];
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for PathAttributes {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -295,10 +303,16 @@ impl Component for AsPath {
 }
 
 impl Deref for AsPath {
-    type Target = Vec<AsSegment>;
+    type Target = [AsSegment];
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for AsPath {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -306,7 +320,7 @@ impl Deref for AsPath {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AsSegment {
     pub type_: AsSegmentType,
-    pub asns: Vec<u32>,
+    pub asns: Box<[u32]>,
     /// Extra member to indicate that this structure was created from a 4-byte AS path
     /// or that it should be encoded as a 4-byte AS path
     pub as4: bool,
@@ -343,13 +357,13 @@ impl Component for AsSegment {
         } else {
             return Err(crate::Error::InternalLength(
                 "AS segment",
-                std::cmp::Ordering::Equal,
+                core::cmp::Ordering::Equal,
             ));
         };
         Ok(Self {
             type_: AsSegmentType::from_u8(type_)
                 .ok_or_else(|| crate::Error::InternalType("AS segment type", u16::from(type_)))?,
-            asns,
+            asns: asns.into_boxed_slice(),
             as4,
         })
     }
@@ -469,7 +483,7 @@ impl Component for MpNextHop {
             }
             _ => Err(crate::Error::InternalLength(
                 "MP_NEXT_HOP",
-                std::cmp::Ordering::Equal,
+                core::cmp::Ordering::Equal,
             )),
         }
     }
@@ -574,9 +588,9 @@ mod tests {
             pa,
             Value {
                 flags: Flags(0x40),
-                data: Data::AsPath(AsPath(vec![AsSegment {
+                data: Data::AsPath(AsPath(alloc::vec![AsSegment {
                     type_: AsSegmentType::AsSequence,
-                    asns: vec![0xfd7d],
+                    asns: Box::new([0xfd7d]),
                     as4: false
                 }])),
             }
@@ -597,9 +611,9 @@ mod tests {
             pa,
             Value {
                 flags: Flags(0x40),
-                data: Data::AsPath(AsPath(vec![AsSegment {
+                data: Data::AsPath(AsPath(alloc::vec![AsSegment {
                     type_: AsSegmentType::AsSequence,
-                    asns: vec![0xfcde_39d1, 0xfcde_3880, 0xfcde_3122],
+                    asns: Box::new([0xfcde_39d1, 0xfcde_3880, 0xfcde_3122]),
                     as4: true
                 }])),
             }
@@ -658,9 +672,9 @@ mod tests {
             pa,
             Value {
                 flags: Flags(0xc0),
-                data: Data::As4Path(AsPath(vec![AsSegment {
+                data: Data::As4Path(AsPath(alloc::vec![AsSegment {
                     type_: AsSegmentType::AsSequence,
-                    asns: vec![0xfd7d],
+                    asns: Box::new([0xfd7d]),
                     as4: true
                 }])),
             }
@@ -689,7 +703,11 @@ mod tests {
                         "::".parse().unwrap(),
                         "fe80::abcd".parse().unwrap()
                     ),
-                    nlri: Routes(vec![Cidr4::new(Ipv4Addr::new(10, 127, 127, 127), 32).into()])
+                    nlri: Routes(alloc::vec![Cidr4::new(
+                        Ipv4Addr::new(10, 127, 127, 127),
+                        32
+                    )
+                    .into()]),
                 }),
             }
         );
@@ -712,9 +730,11 @@ mod tests {
                 data: Data::MpUnreachNlri(MpUnreachNlri {
                     afi: Afi::Ipv4,
                     safi: Safi::Unicast,
-                    withdrawn_routes: Routes(vec![
-                        Cidr4::new(Ipv4Addr::new(172, 23, 227, 0), 24).into()
-                    ])
+                    withdrawn_routes: Routes(alloc::vec![Cidr4::new(
+                        Ipv4Addr::new(172, 23, 227, 0),
+                        24
+                    )
+                    .into()])
                 }),
             }
         );

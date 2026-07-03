@@ -6,10 +6,10 @@ use super::Error;
 #[cfg(feature = "tokio-endec")]
 use super::{Message, Notification, Open, Update};
 use bytes::{Buf, BufMut};
+use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use enum_primitive_derive::Primitive;
 #[cfg(feature = "tokio-endec")]
 use num_traits::FromPrimitive;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 #[cfg(feature = "tokio-endec")]
 use tokio_util::codec::{Decoder, Encoder};
 
@@ -53,7 +53,7 @@ impl Decoder for BgpCodec {
             log::debug!("Remaining bytes after decoding: {buf:?}");
             Err(Error::InternalLength(
                 "message",
-                std::cmp::Ordering::Greater,
+                core::cmp::Ordering::Greater,
             ))
         } else {
             Ok(Some(packet))
@@ -164,7 +164,7 @@ impl Component for IpAddr {
         } else {
             Err(Error::InternalLength(
                 "IP address",
-                std::cmp::Ordering::Equal,
+                core::cmp::Ordering::Equal,
             ))
         }
     }

@@ -4,6 +4,15 @@
 
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#![deny(rust_2018_idioms, missing_debug_implementations)]
+#![deny(clippy::pedantic, clippy::cargo, clippy::nursery, clippy::unwrap_used)]
+#![allow(clippy::multiple_crate_versions)]
+
+#![no_std]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
+
 pub mod capability;
 pub mod cidr;
 mod endec;
@@ -20,12 +29,12 @@ pub use update_builder::UpdateBuilder;
 
 use bytes::{Buf, BufMut};
 use capability::{Capabilities, OptionalParameters};
+use core::net::Ipv4Addr;
 use endec::Component;
 use enum_primitive_derive::Primitive;
 use num_traits::FromPrimitive;
 use path::PathAttributes;
 use route::Routes;
-use std::net::Ipv4Addr;
 
 /// Supported BGP version
 pub const BGP_VERSION: u8 = 4;
@@ -48,7 +57,7 @@ pub enum Error {
     #[error("invalid message type")]
     MessageType(u8),
     #[error("invalid internal length at {0} ({1:?})")]
-    InternalLength(&'static str, std::cmp::Ordering),
+    InternalLength(&'static str, core::cmp::Ordering),
     #[error("invalid {0} type of {1}")]
     InternalType(&'static str, u16),
     #[error("requires MP-BGP capability")]
@@ -122,7 +131,7 @@ impl Open {
             asn: oldbgp_asn,
             hold_time,
             bgp_id,
-            opt_params: vec![capability::OptionalParameterValue::Capabilities(
+            opt_params: alloc::vec![capability::OptionalParameterValue::Capabilities(
                 capabilities,
             )]
             .into(),

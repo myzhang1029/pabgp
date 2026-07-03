@@ -4,8 +4,9 @@
 
 #![allow(clippy::module_name_repetitions)]
 
-use std::fmt;
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use alloc::vec::Vec;
+use core::fmt;
+use core::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 /// A IPv4 CIDR block
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

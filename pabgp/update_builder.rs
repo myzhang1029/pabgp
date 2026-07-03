@@ -7,7 +7,8 @@ use super::cidr::Cidr;
 use super::endec::Component;
 use super::path::{self, AsPath, AsSegment, AsSegmentType, MpNextHop, Origin, PathAttributes};
 use super::route::Routes;
-use std::net::IpAddr;
+use alloc::vec::Vec;
+use core::net::IpAddr;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 /// Builder for UPDATE messages.
@@ -92,7 +93,11 @@ impl UpdateBuilder {
     #[must_use]
     pub fn set_as_path(mut self, type_: AsSegmentType, asns: Vec<u32>) -> Self {
         let as4 = asns.iter().any(|&asn| asn > u32::from(u16::MAX));
-        let segment = AsSegment { type_, asns, as4 };
+        let segment = AsSegment {
+            type_,
+            asns: asns.into_boxed_slice(),
+            as4,
+        };
         self.as_path.0.push(segment);
         self
     }
